@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AGENT_CANVAS_INTERACTIVE_ZOOM,
   agentCanvasLod,
   agentCanvasPreviewKind,
   agentFlowId,
   clampAgentNodeLayout,
   defaultAgentNodeLayout,
   defaultWorkerLayoutForLead,
+  isNodeFullyFramed,
   isNodeOnScreen,
   newCanvasEdgeId,
   noteFlowId,
@@ -22,8 +24,8 @@ describe("agent canvas layout", () => {
     expect(defaultAgentNodeLayout(0)).toMatchObject({
       x: 0,
       y: 80,
-      width: 480,
-      height: 440,
+      width: 380,
+      height: 340,
       role: "none",
     });
     expect(defaultAgentNodeLayout(1).x).toBeGreaterThan(defaultAgentNodeLayout(0).width);
@@ -48,13 +50,14 @@ describe("agent canvas layout", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
     const first = defaultWorkerLayoutForLead(lead, 0);
     const second = defaultWorkerLayoutForLead(lead, 1);
-    expect(first.x).toBe(lead.x + lead.width + 104);
+    expect(first.x).toBe(lead.x + lead.width + 72);
     expect(first.y).toBe(lead.y);
-    expect(second.y).toBeGreaterThan(first.y + first.height);
-    expect(second.x).toBe(first.x);
+    expect(second.y).toBe(first.y);
+    expect(second.x).toBeGreaterThan(first.x + first.width);
   });
 
   it("picks lod from visibility and zoom (all on-screen agents interactive at normal zoom)", () => {
+    expect(AGENT_CANVAS_INTERACTIVE_ZOOM).toBe(0.55);
     expect(agentCanvasLod({ focused: true, onScreen: true, zoom: 1 })).toBe("interactive");
     expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 1 })).toBe("interactive");
     expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 0.45 })).toBe("preview");
@@ -63,10 +66,16 @@ describe("agent canvas layout", () => {
   });
 
   it("detects off-screen cards and clamps layouts", () => {
-    const layout = { x: 0, y: 0, width: 480, height: 440 };
+    const layout = { x: 0, y: 0, width: 380, height: 340 };
     expect(isNodeOnScreen(layout, { x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 })).toBe(true);
     expect(
       isNodeOnScreen(layout, { x: -2000, y: -2000, zoom: 1 }, { width: 800, height: 600 }),
+    ).toBe(false);
+    expect(
+      isNodeFullyFramed(layout, { x: 20, y: 20, zoom: 1 }, { width: 800, height: 600 }, 16),
+    ).toBe(true);
+    expect(
+      isNodeFullyFramed(layout, { x: -10, y: 20, zoom: 1 }, { width: 800, height: 600 }, 16),
     ).toBe(false);
     expect(
       clampAgentNodeLayout({ x: -4, y: 8, width: 100, height: 50, role: "none" }),

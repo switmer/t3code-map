@@ -6,7 +6,7 @@ describe("agentCanvasStore", () => {
   afterEach(() => {
     useAgentCanvasStore.setState({
       mode: "normal",
-      view: { x: 64, y: 64, zoom: 0.85 },
+      view: { x: 32, y: 24, zoom: 0.7 },
       agents: {},
       notes: {},
       edges: [],
@@ -23,8 +23,8 @@ describe("agentCanvasStore", () => {
     useAgentCanvasStore.getState().setAgentLayout("env:thread", {
       x: 40,
       y: 80,
-      width: 480,
-      height: 440,
+      width: 380,
+      height: 340,
       role: "lead",
     });
     useAgentCanvasStore.getState().addEdge({

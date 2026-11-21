@@ -12,13 +12,7 @@ import ChatView from "../ChatView";
 import { BackgroundThreadContext } from "../chat/backgroundThread";
 import { PersistentThreadTerminalDrawer } from "../PersistentThreadTerminals";
 
-/**
- * Live agent session inside a canvas node: the same ChatView used for side chats, plus the
- * thread's terminal drawer when it is open. Tool diffs open on this thread's own panel store.
- *
- * `active` means this node owns canvas-level shortcuts; inactive mounts still stream and accept
- * input, but stand down global listeners via BackgroundThreadContext.
- */
+/** Canvas ChatView mount: flex column pins the absolute composer; `active` owns shortcuts. */
 export function AgentCanvasSession(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -44,10 +38,11 @@ export function AgentCanvasSession(props: {
     <div
       className="nodrag nowheel nopan flex h-full min-h-0 flex-col overflow-hidden bg-background"
       data-agent-canvas-session={scopedThreadKey(threadRef)}
+      data-agent-canvas-session-active={props.active ? "true" : "false"}
       data-side-chat-pane={props.threadId}
       onPointerDown={(event) => event.stopPropagation()}
     >
-      <div className="min-h-0 flex-1 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <BackgroundThreadContext value={!props.active}>
           <ComposerHandleContext value={null}>
             <ChatView

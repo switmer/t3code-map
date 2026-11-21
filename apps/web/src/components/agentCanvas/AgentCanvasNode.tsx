@@ -345,7 +345,12 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         </div>
       ) : null}
 
-      <div className={cn("relative min-h-0", lod === "interactive" ? "flex-1" : "shrink-0")}>
+      <div
+        className={cn(
+          "relative min-h-0",
+          lod === "interactive" ? "flex min-h-0 flex-1 flex-col" : "shrink-0",
+        )}
+      >
         {lod === "interactive" ? (
           <AgentCanvasSession
             environmentId={thread.environmentId}
@@ -382,6 +387,16 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
                   })}
                 </span>
               ) : null}
+            </div>
+            {/* Lightweight composer affordance at preview LOD — real ChatView at interactive zoom. */}
+            <div
+              className="flex shrink-0 items-center gap-1.5 border-t border-border/60 bg-background/80 px-2.5 py-1.5"
+              aria-hidden
+            >
+              <span className="min-h-7 min-w-0 flex-1 truncate rounded-md border border-border/70 bg-muted/30 px-2 py-1 text-2xs text-muted-foreground/80">
+                {gt("Ask anything…")}
+              </span>
+              <span className="size-6 shrink-0 rounded-md bg-primary/80" />
             </div>
           </button>
         )}

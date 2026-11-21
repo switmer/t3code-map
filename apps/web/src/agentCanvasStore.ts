@@ -84,12 +84,12 @@ interface AgentCanvasStore extends AgentCanvasPersisted {
 
 export const AGENT_CANVAS_STORAGE_KEY = "t3code:agent-canvas:v2";
 
-/** Conversation-sized card: title + scrollable thread + usable composer. */
-export const DEFAULT_AGENT_NODE_SIZE = { width: 480, height: 440 } as const;
+/** Conversation-sized card: title + scrollable thread + pinned composer. Sized so ~3–4 columns fit at interactive zoom on a ~1500px window. */
+export const DEFAULT_AGENT_NODE_SIZE = { width: 380, height: 340 } as const;
 export const MIN_AGENT_NODE_SIZE = { width: 360, height: 280 } as const;
 export const MAX_AGENT_NODE_SIZE = { width: 1400, height: 1200 } as const;
 export const DEFAULT_NOTE_SIZE = { width: 188, height: 112 } as const;
-const DEFAULT_AGENT_CANVAS_VIEW: AgentCanvasView = { x: 64, y: 64, zoom: 0.85 };
+const DEFAULT_AGENT_CANVAS_VIEW: AgentCanvasView = { x: 32, y: 24, zoom: 0.7 };
 
 const HISTORY_LIMIT = 40;
 

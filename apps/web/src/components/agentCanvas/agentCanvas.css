@@ -164,6 +164,35 @@
   font-size: var(--text-xs);
 }
 
+/* ChatView roots with flex-1; the session column must be a flex parent so the pane fills
+   and the absolute composer overlay stays pinned to the visible bottom. */
+[data-agent-canvas-session] > .flex {
+  min-height: 0;
+}
+
+[data-agent-canvas-session] [data-chat-column] {
+  min-height: 0;
+  flex: 1 1 0%;
+}
+
+[data-agent-canvas-session] [data-chat-composer-overlay] {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  z-index: 20;
+}
+
+/* Unfocused nodes keep a real composer, just quieter until clicked. */
+[data-agent-canvas-session][data-agent-canvas-session-active="false"] [data-chat-composer-overlay] {
+  opacity: 0.82;
+}
+
+[data-agent-canvas-session][data-agent-canvas-session-active="false"]:focus-within
+  [data-chat-composer-overlay],
+[data-agent-canvas-session][data-agent-canvas-session-active="true"] [data-chat-composer-overlay] {
+  opacity: 1;
+}
+
 [data-agent-canvas-session] .chat-banner-lane {
   left: 0.5rem;
   right: 0.5rem;

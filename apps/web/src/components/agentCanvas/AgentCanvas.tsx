@@ -55,12 +55,14 @@ import { toastManager } from "../ui/toast";
 import { stackedThreadToast } from "../ui/toastHelpers";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import {
+  AGENT_CANVAS_INTERACTIVE_ZOOM,
   agentCanvasLod,
   agentFlowId,
   createNoteId,
   defaultNotePlacement,
   defaultWorkerLayoutForLead,
   isInCanvasScene,
+  isNodeFullyFramed,
   isNodeOnScreen,
   leadSourceHandleForIndex,
   newCanvasEdgeId,
@@ -186,6 +188,10 @@ function AgentCanvasFlow() {
   const [tool, setTool] = useState<CanvasTool>("select");
   const historyGesture = useRef(false);
   const hydratedViewport = useRef(false);
+  const framedScene = useRef(false);
+  const [storeHydrated, setStoreHydrated] = useState(() =>
+    useAgentCanvasStore.persist.hasHydrated(),
+  );
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- measures the canvas with ResizeObserver
   useEffect(() => {
@@ -196,12 +202,71 @@ function AgentCanvasFlow() {
     });
   }, [surface]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- wait for zustand persist before framing
+  useEffect(() => {
+    if (storeHydrated) return;
+    return useAgentCanvasStore.persist.onFinishHydration(() => {
+      setStoreHydrated(true);
+    });
+  }, [storeHydrated]);
+
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- hydrate React Flow from persisted viewport once
   useEffect(() => {
-    if (hydratedViewport.current) return;
+    if (!storeHydrated || hydratedViewport.current) return;
     hydratedViewport.current = true;
     void setViewport({ x: view.x, y: view.y, zoom: view.zoom }, { duration: 0 });
-  }, [setViewport, view.x, view.y, view.zoom]);
+  }, [setViewport, storeHydrated, view.x, view.y, view.zoom]);
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- frame once after persist so cards are not clipped on open
+  useEffect(() => {
+    if (!storeHydrated || framedScene.current || viewportSize === null || threads.length === 0) {
+      return;
+    }
+    const sceneLayouts = threads
+      .map((thread, index) => {
+        const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+        return {
+          threadKey,
+          layout: resolveAgentNodeLayout(index, agents[threadKey]),
+        };
+      })
+      .filter((entry) => isInCanvasScene(entry.layout));
+    if (sceneLayouts.length === 0) return;
+    const fullyFramed =
+      view.zoom >= AGENT_CANVAS_INTERACTIVE_ZOOM &&
+      sceneLayouts.every((entry) => isNodeFullyFramed(entry.layout, view, viewportSize, 24));
+    framedScene.current = true;
+    if (fullyFramed) return;
+    const frameNodes = sceneLayouts.map(({ threadKey, layout }) => ({
+      id: agentFlowId(threadKey),
+      position: { x: layout.x, y: layout.y },
+      width: layout.width,
+      height: layout.height,
+    }));
+    void fitView({
+      padding: 0.14,
+      duration: 0,
+      nodes: frameNodes,
+      minZoom: AGENT_CANVAS_INTERACTIVE_ZOOM,
+      maxZoom: 1,
+    }).then(() => {
+      const next = getViewport();
+      const cleared = { x: next.x, y: next.y + 12, zoom: next.zoom };
+      void setViewport(cleared, { duration: 0 }).then(() => {
+        setView(cleared);
+      });
+    });
+  }, [
+    agents,
+    fitView,
+    getViewport,
+    setView,
+    setViewport,
+    storeHydrated,
+    threads,
+    view,
+    viewportSize,
+  ]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- canvas keyboard shortcuts (? / Esc)
   useEffect(() => {
@@ -694,10 +759,10 @@ function AgentCanvasFlow() {
                 aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
                 onClick={() => {
                   void fitView({
-                    padding: 0.1,
+                    padding: 0.14,
                     duration: 220,
                     nodes: sceneNodes,
-                    minZoom: 0.35,
+                    minZoom: AGENT_CANVAS_INTERACTIVE_ZOOM,
                     maxZoom: 1,
                   }).then(() => {
                     const next = getViewport();

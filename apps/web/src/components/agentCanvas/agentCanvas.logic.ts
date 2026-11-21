@@ -15,12 +15,15 @@ import {
 
 export type AgentCanvasLod = "interactive" | "preview" | "chip";
 
-const NODE_GAP_X = 96;
-const NODE_GAP_Y = 72;
+/** On-screen agents mount live ChatViews at this zoom and above. */
+export const AGENT_CANVAS_INTERACTIVE_ZOOM = 0.55;
+
+const NODE_GAP_X = 72;
+const NODE_GAP_Y = 56;
 const COLUMNS = 2;
-const LEAD_TO_WORKER_GAP_X = 104;
-const WORKER_STACK_GAP_Y = 40;
-const DEFAULT_WORKER_NODE_SIZE = { width: 480, height: 440 } as const;
+const LEAD_TO_WORKER_GAP_X = 72;
+const WORKER_COLUMN_GAP_X = 56;
+const DEFAULT_WORKER_NODE_SIZE = { width: 380, height: 340 } as const;
 /** Nodes parked farther than this are ignored by fit-view / minimap framing. */
 const AGENT_CANVAS_SCENE_BOUND = 2800;
 
@@ -54,16 +57,20 @@ export function defaultAgentNodeLayout(index: number): AgentCanvasNodeLayout {
 }
 
 /**
- * Place a worker in a clean column to the right of its lead, with even vertical spacing.
- * Index 0 is the top worker.
+ * Place workers in columns to the right of the lead so a lead + 3 workers (~4 columns)
+ * still frames at interactive zoom on a typical ~1500px-wide window.
  */
 export function defaultWorkerLayoutForLead(
   lead: Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height">,
   workerIndex: number,
 ): Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height"> {
   return {
-    x: lead.x + lead.width + LEAD_TO_WORKER_GAP_X,
-    y: lead.y + workerIndex * (DEFAULT_WORKER_NODE_SIZE.height + WORKER_STACK_GAP_Y),
+    x:
+      lead.x +
+      lead.width +
+      LEAD_TO_WORKER_GAP_X +
+      workerIndex * (DEFAULT_WORKER_NODE_SIZE.width + WORKER_COLUMN_GAP_X),
+    y: lead.y,
     width: DEFAULT_WORKER_NODE_SIZE.width,
     height: DEFAULT_WORKER_NODE_SIZE.height,
   };
@@ -121,8 +128,29 @@ export function agentCanvasLod(input: {
 }): AgentCanvasLod {
   if (!input.onScreen) return "chip";
   if (input.zoom < 0.35) return "chip";
-  if (input.zoom < 0.55) return "preview";
+  if (input.zoom < AGENT_CANVAS_INTERACTIVE_ZOOM) return "preview";
   return "interactive";
+}
+
+/** True when the full card (not just a sliver) sits inside the viewport with padding. */
+export function isNodeFullyFramed(
+  layout: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  view: AgentCanvasView,
+  viewport: { readonly width: number; readonly height: number },
+  pad = 20,
+): boolean {
+  const left = layout.x * view.zoom + view.x;
+  const top = layout.y * view.zoom + view.y;
+  const right = (layout.x + layout.width) * view.zoom + view.x;
+  const bottom = (layout.y + layout.height) * view.zoom + view.y;
+  return (
+    left >= pad && top >= pad && right <= viewport.width - pad && bottom <= viewport.height - pad
+  );
 }
 
 export function isNodeOnScreen(
