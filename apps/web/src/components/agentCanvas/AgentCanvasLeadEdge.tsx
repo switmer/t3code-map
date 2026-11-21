@@ -1,4 +1,4 @@
-import { BaseEdge, getBezierPath, type Edge, type EdgeProps } from "@xyflow/react";
+import { BaseEdge, type Edge, type EdgeProps } from "@xyflow/react";
 
 export type AgentCanvasLeadFlowEdge = Edge<
   {
@@ -9,8 +9,8 @@ export type AgentCanvasLeadFlowEdge = Edge<
 >;
 
 /**
- * Lead→worker bezier. sourceX/sourceY come from the lead’s out-0/1/2 handles
- * (20% / 50% / 80% down the right edge). Do not offset Y — that detaches the path.
+ * Lead→worker cubic. Exits horizontally from the lead handle first so paths
+ * fan cleanly instead of running as parallel vertical lines along the card.
  */
 export function AgentCanvasLeadEdge({
   id,
@@ -18,20 +18,20 @@ export function AgentCanvasLeadEdge({
   sourceY,
   targetX,
   targetY,
-  sourcePosition,
-  targetPosition,
   markerEnd,
   style,
   animated,
+  data,
 }: EdgeProps<AgentCanvasLeadFlowEdge>) {
-  const [path] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
-  });
+  const fanIndex = data?.fanIndex ?? 0;
+  // Exit horizontally well clear of the lead card before curving to the worker.
+  const span = Math.max(96, Math.abs(targetX - sourceX) * 0.62);
+  const fanNudge = (fanIndex - 1) * 10;
+  const c1x = sourceX + span;
+  const c1y = sourceY;
+  const c2x = targetX - span * 0.85;
+  const c2y = targetY;
+  const path = `M ${sourceX},${sourceY} C ${c1x},${c1y + fanNudge * 0.15} ${c2x},${c2y - fanNudge * 0.1} ${targetX},${targetY}`;
 
   return (
     <BaseEdge

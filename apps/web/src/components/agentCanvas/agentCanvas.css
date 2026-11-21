@@ -32,7 +32,15 @@
 
 .agent-canvas-flow .react-flow__node.selected,
 .agent-canvas-flow .react-flow__node:focus-within {
-  z-index: 3;
+  z-index: 5;
+}
+
+.agent-canvas-flow .react-flow__panel {
+  z-index: 8;
+}
+
+.agent-canvas-flow .react-flow__minimap {
+  z-index: 8;
 }
 
 .agent-canvas-flow .react-flow__handle {
@@ -58,23 +66,12 @@
 
 .agent-canvas-flow .react-flow__handle-right,
 .agent-canvas-flow .react-flow__handle[data-handleid="out"],
-.agent-canvas-flow .react-flow__handle[data-handleid="out-0"],
-.agent-canvas-flow .react-flow__handle[data-handleid="out-1"],
-.agent-canvas-flow .react-flow__handle[data-handleid="out-2"],
+.agent-canvas-flow .react-flow__handle[data-handleid^="out-"],
 .agent-canvas-flow .react-flow__handle[data-handleid="out-bottom"] {
   background: var(--color-primary);
 }
 
-/* Fan lead outlets down the right edge (override RF’s default top: 50%). */
-.agent-canvas-flow .react-flow__handle[data-handleid="out-0"] {
-  top: 18% !important;
-}
-.agent-canvas-flow .react-flow__handle[data-handleid="out-1"] {
-  top: 50% !important;
-}
-.agent-canvas-flow .react-flow__handle[data-handleid="out-2"] {
-  top: 82% !important;
-}
+/* Lead fan outlets — positions come from inline style (leadHandleTopPercent). */
 
 .agent-canvas-flow .react-flow__handle:hover,
 .agent-canvas-flow .react-flow__handle:focus-visible {
@@ -168,7 +165,9 @@
   --chat-lane-inset-start: 0px;
   --chat-lane-inset-end: 0px;
   --chat-timeline-gutter: 0px;
-  --chat-compact-pad: 0.4rem;
+  --chat-compact-pad: 8px;
+  /* Fade tall enough to hide half-clipped virtualized rows under the node header. */
+  --workspace-titlebar-scroll-fade-height: 18px;
   font-size: 12px;
   line-height: 1.4;
 }
@@ -229,6 +228,34 @@
 
 [data-chat-density="compact"] .messages-timeline-scroll {
   scrollbar-gutter: auto;
+  /* Thin overlay scrollbars; avoid double gutter. */
+  scrollbar-width: thin;
+  scroll-padding-top: var(--workspace-titlebar-scroll-fade-height);
+  padding-top: 2px !important;
+}
+
+/* Always mask the top edge so virtualized rows never read as half-clipped. */
+[data-chat-density="compact"] .messages-timeline-scroll {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 8px,
+    black var(--workspace-titlebar-scroll-fade-height),
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent 8px,
+    black var(--workspace-titlebar-scroll-fade-height),
+    black 100%
+  );
+}
+
+/* Tighten list header/footer spacers so short threads sit on the composer. */
+[data-chat-density="compact"] .messages-timeline-scroll [class*="h-3"],
+[data-chat-density="compact"] .messages-timeline-scroll [class*="sm:h-4"] {
+  height: 4px !important;
 }
 
 /* Dense message rows. */
@@ -322,7 +349,10 @@
   padding: 0.35rem 0.45rem !important;
   font-size: 11px !important;
   line-height: 1.35 !important;
-  border-radius: 0.3rem !important;
+  border-radius: 4px !important;
+  overflow-x: auto !important;
+  max-width: 100% !important;
+  white-space: pre !important;
 }
 
 [data-chat-density="compact"] .prose code,
@@ -503,6 +533,28 @@
     opacity: 0;
     transform: scale(1.5);
   }
+}
+
+/* Design tokens: 4px grid radii, shared chrome with notes / toolbar / minimap. */
+.agent-canvas-flow [data-agent-canvas-node] {
+  border-radius: 12px;
+}
+
+.agent-canvas-flow [data-agent-canvas-note] {
+  border-radius: 8px;
+}
+
+.agent-canvas-flow .react-flow__resize-control.line {
+  border-width: 1px;
+}
+
+.agent-canvas-flow .react-flow__node.selected [data-agent-canvas-node] {
+  outline: none;
+}
+
+/* Focus ring inside nodes must not be clipped by overflow:hidden. */
+[data-agent-canvas-session] :focus-visible {
+  outline-offset: -2px;
 }
 
 @media (prefers-reduced-motion: reduce) {

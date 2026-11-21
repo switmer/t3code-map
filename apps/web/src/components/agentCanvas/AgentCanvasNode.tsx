@@ -26,6 +26,7 @@ import type { AgentCanvasLod } from "./agentCanvas.logic";
 import {
   agentCanvasPreviewKind,
   LEAD_SOURCE_HANDLES,
+  leadHandleTopPercent,
   readShotDemo,
   workerKeysForLead,
 } from "./agentCanvas.logic";
@@ -98,13 +99,13 @@ function RolePill(props: { readonly role: AgentCanvasRole }) {
   return (
     <span
       className={cn(
-        "inline-flex h-5 items-center gap-1 rounded-md px-1.5 text-2xs font-medium tracking-tight",
+        "inline-flex h-4 shrink-0 items-center gap-1 rounded px-1 text-3xs font-medium tracking-tight",
         props.role === "lead" && "bg-primary/10 text-primary",
         props.role === "coordinator" && "bg-accent text-accent-foreground",
         props.role === "worker" && "bg-muted text-muted-foreground",
       )}
     >
-      <Icon aria-hidden className="size-3 opacity-80" />
+      <Icon aria-hidden className="size-2.5 opacity-80" />
       {label}
     </span>
   );
@@ -138,8 +139,6 @@ function previewLines(input: {
   return [input.thread.title];
 }
 
-const LEAD_HANDLE_TOPS = ["18%", "50%", "82%"] as const;
-
 export const AgentCanvasNode = memo(function AgentCanvasNode({
   id,
   data,
@@ -155,10 +154,17 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
   const [broadcastBusy, setBroadcastBusy] = useState(false);
   const relativeUpdated = useRelativeTimeState(data.thread.updatedAt);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- RF must remeasure fan-out handle positions
+  const workers = workerKeysForLead(data.threadKey, edges);
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- RF handle positions are outside React; remount them when fan outlets change
   useEffect(() => {
     updateNodeInternals(id);
-  }, [id, updateNodeInternals]);
+  }, [
+    id,
+    updateNodeInternals,
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- fan count / role changes move handle Y without resizing the node
+    workers.length,
+    data.role,
+  ]);
 
   const thread = data.thread;
   const threadKey = data.threadKey;
@@ -168,7 +174,6 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
   const tone = shot?.tone ?? threadStatusTone(thread);
   const status = shot?.statusLabel ?? threadStatusLabel(thread, gt);
   const title = shot?.title ?? thread.title;
-  const workers = workerKeysForLead(threadKey, edges);
   const isLeadLike = data.role === "lead" || data.role === "coordinator";
   const highlighted = selected || data.focused;
   const lines = previewLines({ thread, gt, shotLines: shot?.lines });
@@ -229,9 +234,9 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         handleClassName="!size-1.5 !rounded-xs !border-primary !bg-background"
       />
 
-      <Handle type="target" position={Position.Left} id="in" className="!-left-1" />
+      <Handle type="target" position={Position.Left} id="in" className="!-left-1 !top-1/2" />
       <Handle type="target" position={Position.Top} id="in-top" className="!-top-1" />
-      {/* Always mount fan outlets so lead edges can leave from distinct Y positions. */}
+      {/* Fan outlets evenly spaced so lead edges leave from distinct Y positions. */}
       {LEAD_SOURCE_HANDLES.map((handleId, index) => (
         <Handle
           key={handleId}
@@ -239,7 +244,10 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           position={Position.Right}
           id={handleId}
           className="!-right-1"
-          style={{ top: LEAD_HANDLE_TOPS[index], transform: "translate(50%, -50%)" }}
+          style={{
+            top: leadHandleTopPercent(index),
+            transform: "translate(50%, -50%)",
+          }}
         />
       ))}
       <Handle type="source" position={Position.Right} id="out" className="!-right-1" />
@@ -261,7 +269,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           </TooltipTrigger>
           <TooltipPopup>{title}</TooltipPopup>
         </Tooltip>
-        <span className="max-w-20 shrink-0 truncate font-mono text-3xs text-muted-foreground">
+        <span className="max-w-24 shrink-0 truncate font-mono text-3xs leading-none text-muted-foreground">
           {modelLabel}
         </span>
         <RolePill role={data.role} />

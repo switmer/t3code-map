@@ -139,6 +139,7 @@ import {
   useState,
 } from "react";
 import { BackgroundThreadContext } from "./chat/backgroundThread";
+import { useChatDensity } from "./chat/chatDensity";
 import { WorkspaceMutationIdContext } from "./chat/ChatMarkdownMedia";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
@@ -461,6 +462,7 @@ export default function ChatView(props: ChatViewProps) {
     embedded: parentPanel,
   } = props;
   const embedded = parentPanel !== undefined;
+  const chatDensity = useChatDensity();
   const panelHostShell = useQuietThreadShell(parentPanel?.hostRef ?? null);
   const canOperateThread = useEnvironmentScope(environmentId, AuthOrchestrationOperateScope);
   const canOperateTerminal = useEnvironmentScope(environmentId, AuthTerminalOperateScope);
@@ -3626,7 +3628,7 @@ export default function ChatView(props: ChatViewProps) {
                   onFooterGrow={onTimelineFooterGrowStable}
                   hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
                   emptyPlaceholderInset={composerReservedHeight}
-                  topFadeEnabled={!hasTimelineTopBanner}
+                  topFadeEnabled={chatDensity === "compact" || !hasTimelineTopBanner}
                   {...(threadHistoryControls === undefined
                     ? {}
                     : { historyControls: threadHistoryControls })}

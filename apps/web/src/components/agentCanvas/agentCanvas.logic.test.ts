@@ -6,10 +6,14 @@ import {
   agentCanvasPreviewKind,
   agentFlowId,
   clampAgentNodeLayout,
+  computeFitViewport,
   defaultAgentNodeLayout,
   defaultWorkerLayoutForLead,
   isNodeFullyFramed,
   isNodeOnScreen,
+  isSceneClearOfChrome,
+  leadHandleTopPercent,
+  leadSourceHandleForIndex,
   newCanvasEdgeId,
   noteFlowId,
   parseAgentFlowId,
@@ -46,14 +50,44 @@ describe("agent canvas layout", () => {
     });
   });
 
-  it("stacks workers in a clean column beside a lead", () => {
+  it("stacks one or two workers beside a lead", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
-    const first = defaultWorkerLayoutForLead(lead, 0);
-    const second = defaultWorkerLayoutForLead(lead, 1);
-    expect(first.x).toBe(lead.x + lead.width + 88);
-    expect(first.y).toBe(lead.y);
+    const first = defaultWorkerLayoutForLead(lead, 0, 2);
+    const second = defaultWorkerLayoutForLead(lead, 1, 2);
+    expect(first.x).toBe(lead.x + lead.width + 72);
     expect(second.x).toBe(first.x);
     expect(second.y).toBeGreaterThan(first.y + first.height);
+  });
+
+  it("lays out three-plus workers in a two-column grid", () => {
+    const lead = { x: 40, y: 80, width: 400, height: 360 };
+    const a = defaultWorkerLayoutForLead(lead, 0, 3);
+    const b = defaultWorkerLayoutForLead(lead, 1, 3);
+    const c = defaultWorkerLayoutForLead(lead, 2, 3);
+    expect(b.x).toBeGreaterThan(a.x);
+    expect(b.y).toBe(a.y);
+    expect(c.x).toBe(a.x);
+    expect(c.y).toBeGreaterThan(a.y + a.height);
+  });
+
+  it("fits the scene clear of toolbar and minimap chrome", () => {
+    const layouts = [
+      { x: 0, y: 0, width: 380, height: 300 },
+      { x: 460, y: 0, width: 360, height: 300 },
+      { x: 860, y: 0, width: 360, height: 300 },
+    ];
+    const viewport = { width: 1512, height: 982 };
+    const view = computeFitViewport(layouts, viewport);
+    expect(isSceneClearOfChrome(layouts, view, viewport)).toBe(true);
+    expect(view.zoom).toBeGreaterThanOrEqual(AGENT_CANVAS_INTERACTIVE_ZOOM);
+  });
+
+  it("spreads lead handles evenly for fan edges", () => {
+    expect(leadSourceHandleForIndex(0, 1)).toBe("out-2");
+    expect(leadSourceHandleForIndex(0, 3)).toBe("out-0");
+    expect(leadSourceHandleForIndex(1, 3)).toBe("out-2");
+    expect(leadSourceHandleForIndex(2, 3)).toBe("out-4");
+    expect(leadHandleTopPercent(0)).toBe(`${(1 / 7) * 100}%`);
   });
 
   it("picks lod from visibility and zoom (all on-screen agents interactive at normal zoom)", () => {

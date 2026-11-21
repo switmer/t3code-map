@@ -58,12 +58,13 @@ import {
   AGENT_CANVAS_INTERACTIVE_ZOOM,
   agentCanvasLod,
   agentFlowId,
+  computeFitViewport,
   createNoteId,
   defaultNotePlacement,
   defaultWorkerLayoutForLead,
   isInCanvasScene,
-  isNodeFullyFramed,
   isNodeOnScreen,
+  isSceneClearOfChrome,
   leadSourceHandleForIndex,
   newCanvasEdgeId,
   noteFlowId,
@@ -158,7 +159,7 @@ function AgentCanvasFlow() {
   const threads = useVisibleThreadShells();
   const routeTarget = useThreadRouteTarget();
   const focusedKey = routeTarget?.kind === "server" ? scopedThreadKey(routeTarget.threadRef) : null;
-  const { fitView, setViewport, getViewport, screenToFlowPosition } = useReactFlow();
+  const { setViewport, screenToFlowPosition } = useReactFlow();
 
   const view = useAgentCanvasStore((state) => state.view);
   const agents = useAgentCanvasStore((state) => state.agents);
@@ -217,7 +218,7 @@ function AgentCanvasFlow() {
     void setViewport({ x: view.x, y: view.y, zoom: view.zoom }, { duration: 0 });
   }, [setViewport, storeHydrated, view.x, view.y, view.zoom]);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- frame once after persist so cards are not clipped on open
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- frame once after persist so cards clear toolbar/minimap chrome
   useEffect(() => {
     if (!storeHydrated || framedScene.current || viewportSize === null || threads.length === 0) {
       return;
@@ -232,43 +233,26 @@ function AgentCanvasFlow() {
       })
       .filter((entry) => isInCanvasScene(entry.layout));
     if (sceneLayouts.length === 0) return;
-    const fullyFramed =
-      view.zoom >= AGENT_CANVAS_INTERACTIVE_ZOOM &&
-      sceneLayouts.every((entry) => isNodeFullyFramed(entry.layout, view, viewportSize, 24));
     framedScene.current = true;
-    if (fullyFramed) return;
-    const frameNodes = sceneLayouts.map(({ threadKey, layout }) => ({
-      id: agentFlowId(threadKey),
-      position: { x: layout.x, y: layout.y },
-      width: layout.width,
-      height: layout.height,
-    }));
-    void fitView({
-      padding: 0.28,
-      duration: 0,
-      nodes: frameNodes,
-      // Allow preview LOD when many nodes must fit; interactive rehydrates when zoomed in.
-      minZoom: 0.35,
-      maxZoom: 1,
-    }).then(() => {
-      const next = getViewport();
-      // Shift left/up slightly so minimap + toolbar don't eat the right/bottom pad.
-      const cleared = { x: next.x - 18, y: next.y + 4, zoom: next.zoom };
-      void setViewport(cleared, { duration: 0 }).then(() => {
-        setView(cleared);
-      });
+    if (
+      view.zoom >= AGENT_CANVAS_INTERACTIVE_ZOOM &&
+      isSceneClearOfChrome(
+        sceneLayouts.map((entry) => entry.layout),
+        view,
+        viewportSize,
+      )
+    ) {
+      return;
+    }
+    const cleared = computeFitViewport(
+      sceneLayouts.map((entry) => entry.layout),
+      viewportSize,
+      { minZoom: 0.35, maxZoom: 1 },
+    );
+    void setViewport(cleared, { duration: 0 }).then(() => {
+      setView(cleared);
     });
-  }, [
-    agents,
-    fitView,
-    getViewport,
-    setView,
-    setViewport,
-    storeHydrated,
-    threads,
-    view,
-    viewportSize,
-  ]);
+  }, [agents, setView, setViewport, storeHydrated, threads, view, viewportSize]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- canvas keyboard shortcuts (? / Esc)
   useEffect(() => {
@@ -451,7 +435,7 @@ function AgentCanvasFlow() {
       const index = ordered.indexOf(edge.target);
       if (index >= 0) {
         fanIndex = index;
-        sourceHandle = leadSourceHandleForIndex(index);
+        sourceHandle = leadSourceHandleForIndex(index, ordered.length);
       }
     }
     // Lead edges: fan sourceHandles + fanIndex so AgentCanvasLeadEdge can spread origins.
@@ -564,9 +548,10 @@ function AgentCanvasFlow() {
       kind === "lead"
         ? edges.filter((edge) => edge.kind === "lead" && edge.source === connection.source).length
         : 0;
+    const fanTotal = existingLeadTargets + 1;
     const sourceHandle =
       kind === "lead"
-        ? (connection.sourceHandle ?? leadSourceHandleForIndex(existingLeadTargets))
+        ? (connection.sourceHandle ?? leadSourceHandleForIndex(existingLeadTargets, fanTotal))
         : (connection.sourceHandle ?? "out");
     pushHistory();
     addStoreEdge({
@@ -583,7 +568,7 @@ function AgentCanvasFlow() {
       if (targetAgent !== null && (agents[targetAgent]?.role ?? "none") === "none") {
         setAgentRole(targetAgent, "worker");
       }
-      // Keep workers in a clean column so new connections never stack on top of each other.
+      // Keep workers in a clean stack/grid so new connections never stack on each other.
       if (targetAgent !== null) {
         const leadLayout = agents[sourceAgent] ?? resolveAgentNodeLayout(0, undefined);
         const existingWorkers = workerKeysForLead(sourceAgent, [
@@ -595,16 +580,18 @@ function AgentCanvasFlow() {
             kind: "lead",
           },
         ]);
-        const workerIndex = Math.max(0, existingWorkers.indexOf(targetAgent));
-        const placed = defaultWorkerLayoutForLead(leadLayout, workerIndex);
-        setAgentLayout(targetAgent, {
-          ...(agents[targetAgent] ?? {
+        const workerCount = existingWorkers.length;
+        for (const [workerIndex, workerKey] of existingWorkers.entries()) {
+          const placed = defaultWorkerLayoutForLead(leadLayout, workerIndex, workerCount);
+          setAgentLayout(workerKey, {
+            ...(agents[workerKey] ?? {
+              ...placed,
+              role: "worker" as const,
+            }),
             ...placed,
-            role: "worker" as const,
-          }),
-          ...placed,
-          role: "worker",
-        });
+            role: "worker",
+          });
+        }
       }
     }
   };
@@ -761,19 +748,31 @@ function AgentCanvasFlow() {
                 variant="ghost-muted"
                 aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
                 onClick={() => {
-                  void fitView({
-                    padding: 0.28,
-                    duration: 220,
-                    nodes: sceneNodes,
+                  const layouts = sceneNodes
+                    .filter((node) => node.type === "agent" || node.type === "note")
+                    .map((node) => ({
+                      x: node.position.x,
+                      y: node.position.y,
+                      width:
+                        typeof node.width === "number"
+                          ? node.width
+                          : typeof node.style?.width === "number"
+                            ? node.style.width
+                            : DEFAULT_AGENT_NODE_SIZE.width,
+                      height:
+                        typeof node.height === "number"
+                          ? node.height
+                          : typeof node.style?.height === "number"
+                            ? node.style.height
+                            : DEFAULT_AGENT_NODE_SIZE.height,
+                    }));
+                  const size = viewportSize ?? { width: 1200, height: 800 };
+                  const cleared = computeFitViewport(layouts, size, {
                     minZoom: 0.35,
                     maxZoom: 1,
-                  }).then(() => {
-                    const next = getViewport();
-                    // Shift left/up slightly so minimap + toolbar don't eat the right/bottom pad.
-                    const cleared = { x: next.x - 18, y: next.y + 6, zoom: next.zoom };
-                    void setViewport(cleared, { duration: 0 }).then(() => {
-                      setView(cleared);
-                    });
+                  });
+                  void setViewport(cleared, { duration: 220 }).then(() => {
+                    setView(cleared);
                   });
                 }}
               >
