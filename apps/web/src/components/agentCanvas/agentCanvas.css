@@ -166,8 +166,6 @@
   --chat-lane-inset-end: 0px;
   --chat-timeline-gutter: 0px;
   --chat-compact-pad: 8px;
-  /* Fade tall enough to hide half-clipped virtualized rows under the node header. */
-  --workspace-titlebar-scroll-fade-height: 18px;
   font-size: 12px;
   line-height: 1.4;
 }
@@ -179,14 +177,63 @@
 [data-agent-canvas-session] [data-chat-column] {
   min-height: 0;
   flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
 }
 
+/*
+ * Compact panes: composer is in normal flow (ChatView sets relative for compact;
+ * keep CSS as a belt-and-suspenders against absolute utilities).
+ */
 [data-agent-canvas-session] [data-chat-composer-overlay] {
-  position: absolute;
-  inset-inline: 0;
-  bottom: 0;
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
   z-index: 20;
-  padding-top: 0 !important;
+  flex-shrink: 0;
+  /* Full-page composer carries vertical padding/min-heights that steal the timeline. */
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  max-height: 3.25rem;
+  overflow: hidden;
+}
+
+[data-agent-canvas-session] .chat-composer-lane,
+[data-agent-canvas-session] [data-chat-composer-stack] {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+}
+
+[data-agent-canvas-session] [data-chat-canvas],
+[data-agent-canvas-session] [data-chat-canvas] > .relative {
+  min-height: 0;
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Conversation + timeline must fill the pane; otherwise the scroller shrink-wraps
+   to content and the empty band sits OUTSIDE the scroll (above the composer).
+   Absolute fill beats nested flex/% height quirks inside React Flow nodes. */
+[data-agent-canvas-session] [data-workspace-area="conversation"] {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-agent-canvas-session] [data-assistant-citation-viewport] {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 [data-agent-canvas-session][data-agent-canvas-session-active="false"] [data-chat-composer-overlay] {
@@ -228,34 +275,23 @@
 
 [data-chat-density="compact"] .messages-timeline-scroll {
   scrollbar-gutter: auto;
-  /* Thin overlay scrollbars; avoid double gutter. */
   scrollbar-width: thin;
-  scroll-padding-top: var(--workspace-titlebar-scroll-fade-height);
-  padding-top: 2px !important;
+  /* Fill the conversation pane (flex, not % height). justify-content is set in JS:
+     flex-end only for short threads — with overflow it fights scrollTop and hollows the pane. */
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding-top: 0 !important;
 }
 
-/* Always mask the top edge so virtualized rows never read as half-clipped. */
-[data-chat-density="compact"] .messages-timeline-scroll {
-  -webkit-mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 8px,
-    black var(--workspace-titlebar-scroll-fade-height),
-    black 100%
-  );
-  mask-image: linear-gradient(
-    to bottom,
-    transparent 0,
-    transparent 8px,
-    black var(--workspace-titlebar-scroll-fade-height),
-    black 100%
-  );
-}
-
-/* Tighten list header/footer spacers so short threads sit on the composer. */
-[data-chat-density="compact"] .messages-timeline-scroll [class*="h-3"],
-[data-chat-density="compact"] .messages-timeline-scroll [class*="sm:h-4"] {
-  height: 4px !important;
+/* Flush list footers against the composer (trailing pad removed in compact footer). */
+[data-chat-density="compact"] .messages-timeline-scroll .h-3,
+[data-chat-density="compact"] .messages-timeline-scroll .h-4,
+[data-chat-density="compact"] .messages-timeline-scroll .sm\:h-4 {
+  height: 0 !important;
+  min-height: 0 !important;
 }
 
 /* Dense message rows. */
@@ -344,15 +380,38 @@
 }
 
 [data-chat-density="compact"] .prose pre,
-[data-chat-density="compact"] pre {
-  margin-block: 0.25rem !important;
-  padding: 0.35rem 0.45rem !important;
+[data-chat-density="compact"] pre,
+[data-chat-density="compact"] [data-code-block],
+[data-chat-density="compact"] .shiki {
+  margin-block: 0.15rem 0 !important;
+  padding: 0.25rem 0.4rem !important;
   font-size: 11px !important;
-  line-height: 1.35 !important;
+  line-height: 1.3 !important;
   border-radius: 4px !important;
   overflow-x: auto !important;
+  max-height: none !important;
   max-width: 100% !important;
   white-space: pre !important;
+  color: var(--color-foreground) !important;
+  background: color-mix(in oklab, var(--color-muted) 55%, transparent) !important;
+}
+
+[data-chat-density="compact"] .prose table {
+  font-size: 11px !important;
+  width: 100% !important;
+  margin-block: 0.25rem !important;
+}
+
+[data-chat-density="compact"] .prose th,
+[data-chat-density="compact"] .prose td {
+  padding: 0.1rem 0.25rem !important;
+  border-color: color-mix(in oklab, var(--color-border) 80%, transparent) !important;
+}
+
+/* Nested tool-group lists size to content in compact panes (no 18rem hollow). */
+[data-chat-density="compact"] [data-tool-group-scroll] {
+  max-height: none !important;
+  height: auto !important;
 }
 
 [data-chat-density="compact"] .prose code,
@@ -412,6 +471,62 @@
   max-width: 100% !important;
 }
 
+/* Kill trailing markdown air so scrolled-to-end ink sits on the composer. */
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .prose > :last-child,
+[data-chat-density="compact"]
+  [data-timeline-row-kind="message"]
+  .assistant-message-markdown
+  > :last-child {
+  margin-bottom: 0 !important;
+}
+
+[data-chat-density="compact"] .messages-timeline-row-frame,
+[data-chat-density="compact"] [data-timeline-row-id],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] > div,
+[data-chat-density="compact"] [data-timeline-row-kind="assistant-meta"],
+[data-chat-density="compact"] [data-timeline-row-kind="working"] {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Meta/copy chrome and author labels are air in a 300px pane — hide in compact. */
+[data-chat-density="compact"] [data-timeline-row-kind="assistant-meta"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .group\/assistant > .mt-1\.5,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] [class*="AssistantMessageMeta"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] button[aria-label*="Copy"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] button[aria-label*="Fork"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] button[aria-label*="Reply"] {
+  display: none !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .relative.min-w-0 {
+  padding-block: 0 !important;
+}
+
+/* Artifact / fence chrome: no footer toolbar air under the last code sample. */
+[data-chat-density="compact"] [data-timeline-row-kind="message"] [data-code-block] + *,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] pre + div,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] [class*="code-block"] footer,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] figure {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+[data-chat-density="compact"]
+  [data-compact-timeline-content]
+  > :last-child
+  .messages-timeline-row-frame,
+[data-chat-density="compact"] [data-compact-timeline-content] > :last-child [data-timeline-row-id] {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-overlay] {
+  /* Composer surface already has its own top border; no extra air above it. */
+  border-top: 0 !important;
+}
+
 /* Compact pinned composer. */
 [data-chat-density="compact"] [data-chat-composer-surface="true"] {
   border-radius: 0 !important;
@@ -419,6 +534,17 @@
   box-shadow: none !important;
   background: color-mix(in oklab, var(--color-background) 92%, var(--color-muted)) !important;
   padding-block: 0 !important;
+  /* Defeat full-page rounded-2xl / min-height so the overlay max-height wins. */
+  min-height: 0 !important;
+  max-height: 3.25rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-overlay] form,
+[data-chat-density="compact"] .chat-composer-lane form {
+  min-height: 0 !important;
+  max-height: 3.25rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 [data-chat-density="compact"] [data-chat-composer-surface="true"]::before,
@@ -427,9 +553,9 @@
 }
 
 [data-chat-density="compact"] .composer-tiptap {
-  min-height: calc(1.25lh + 0.25rem) !important;
-  max-height: calc(4lh + 0.5rem) !important;
-  padding: 0.2rem 0.15rem !important;
+  min-height: 1.25lh !important;
+  max-height: 2.5lh !important;
+  padding: 0.15rem 0.1rem !important;
   font-size: 12px !important;
   line-height: 1.35 !important;
 }

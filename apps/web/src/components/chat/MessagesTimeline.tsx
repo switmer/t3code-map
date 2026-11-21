@@ -8,6 +8,7 @@ import { AudioPreviewUnmountContext } from "../files/AudioPreview";
 import { ThreadFindTimelineContext } from "./ThreadFindProvider";
 import { MarkdownFindContext } from "./markdownFindContext";
 import { useChatCanvas } from "./ChatCanvasContext";
+import { useChatDensity } from "./chatDensity";
 import { WorkLogBlock } from "./WorkLog";
 import { TimelinePendingApprovalRow } from "./TimelinePendingApprovalRow";
 import type { WorktreeSetupSnapshot } from "@t3tools/contracts";
@@ -168,10 +169,13 @@ const TIMELINE_LIST_FADE_HEADER = (
 function TimelineListFooter({
   composerInset,
   onGrow,
+  trailingPad = true,
   children,
 }: {
   readonly composerInset: number;
   readonly onGrow: (() => void) | undefined;
+  /** Full-page chat keeps a small end pad; compact canvas panes sit flush on the composer. */
+  readonly trailingPad?: boolean;
   readonly children?: ReactNode;
 }) {
   const contentRef = useRef<HTMLDivElement>(null);
@@ -190,7 +194,7 @@ function TimelineListFooter({
     <div>
       <div ref={contentRef}>{children}</div>
       <div aria-hidden style={{ height: composerInset }} />
-      <div aria-hidden className="h-3 sm:h-4" />
+      {trailingPad ? <div aria-hidden className="h-3 sm:h-4" /> : null}
     </div>
   );
 }
@@ -428,6 +432,8 @@ const ConversationTimeline = memo(function ConversationTimeline({
   historyControls,
 }: MessagesTimelineProps) {
   const gt = useGT();
+  const chatDensity = useChatDensity();
+  const compactDensity = chatDensity === "compact";
   const listIdentityKey = displayThreadKey ?? routeThreadKey;
   // Snapshot restore positions on identity changes; ongoing scroll writes must not move them.
   // Find open at the opening is part of the snapshot: opening find later
@@ -447,10 +453,14 @@ const ConversationTimeline = memo(function ConversationTimeline({
   );
   // A list that opens on a thread with find open takes the opening step below,
   // so the restore runs and releases follow once for find.
+  // Compact canvas panes always open at the end — never restore a full-page mid-scroll
+  // into a ~300px card (that left blank/top-clipped history).
   const [positionedThreadKey, setPositionedThreadKey] = useState<string | null>(() =>
-    listState.rememberedPosition?.atEnd === false || findOpen ? null : listIdentityKey,
+    compactDensity || !(listState.rememberedPosition?.atEnd === false || findOpen)
+      ? listIdentityKey
+      : null,
   );
-  const restoringThreadPosition = positionedThreadKey !== listIdentityKey;
+  const restoringThreadPosition = !compactDensity && positionedThreadKey !== listIdentityKey;
   const prefersReducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
   const [settlingListIdentity, setSettlingListIdentity] = useState<string | null>(listIdentityKey);
   const [playingAudioRows, setPlayingAudioRows] = useState<ReadonlyMap<HTMLAudioElement, string>>(
@@ -461,18 +471,18 @@ const ConversationTimeline = memo(function ConversationTimeline({
   let paintedExpandedWorkGroupIds = expandedWorkGroupIds;
   let paintedExpandedAttemptIds = expandedAttemptIds;
   const identityChanged = listState.identity !== listIdentityKey;
-  const { rememberedPosition, workGroupViewState } = identityChanged
-    ? timelineListStateFor(listIdentityKey)
-    : listState;
+  const restored = identityChanged ? timelineListStateFor(listIdentityKey) : listState;
+  const rememberedPosition = compactDensity ? undefined : restored.rememberedPosition;
+  const workGroupViewState = restored.workGroupViewState;
   if (identityChanged) {
     setPlayingAudioRows(new Map());
     setListState({
       identity: listIdentityKey,
-      rememberedPosition,
+      rememberedPosition: restored.rememberedPosition,
       workGroupViewState,
       findOpenAtOpening: findOpen,
     });
-    setPositionedThreadKey(null);
+    setPositionedThreadKey(compactDensity ? listIdentityKey : null);
     setSettlingListIdentity(listIdentityKey);
     // A viewer pinned in another thread must not keep live follow off here,
     // nor when that thread comes back.
@@ -751,7 +761,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
     runningRunId,
     expandedRunIds: visibleExpandedRunIds,
     expandedAttemptIds: visibleExpandedAttemptIds,
+    // Compact panes expand every tool group; ExpandedWorkGroupEntries stacks
+    // plain rows (no nested LegendList) so dense tools fill the card.
     expandedWorkGroupIds,
+    expandAllWorkGroups: compactDensity,
     isWorking,
     runlessWorkActive,
     activeTurnStartedAt,
@@ -1208,7 +1221,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
   );
   const listHeaderLeadingContent =
     parentThreadLink === null ? (
-      topFadeEnabled ? (
+      compactDensity ? (
+        // 1px spacer — header border is the divider; no fade, no half-clip pad.
+        <div aria-hidden className="h-px" />
+      ) : topFadeEnabled ? (
         TIMELINE_LIST_FADE_HEADER
       ) : (
         TIMELINE_LIST_HEADER
@@ -1390,6 +1406,7 @@ const ConversationTimeline = memo(function ConversationTimeline({
     <TimelineListFooter
       composerInset={anchoredEndSpace ? 0 : contentInsetEndAdjustment}
       onGrow={onFooterGrow}
+      trailingPad={!compactDensity}
     >
       {footer}
       {unmatchedPendingApprovals.length > 0 ? (
@@ -1412,6 +1429,48 @@ const ConversationTimeline = memo(function ConversationTimeline({
     const scrollNode = listRef.current?.getScrollableNode();
     if (scrollNode) forwardWheelToTimeline(event, scrollNode);
   };
+
+  const compactScrollRef = useRef<HTMLDivElement | null>(null);
+  const compactReadyForKeyRef = useRef<string | null>(null);
+  const compactRowCount = rows.length;
+  // Compact canvas panes: skip LegendList. Virtualizer end-alignment leaves short
+  // threads top-pinned with a phantom band above the composer; a plain column with
+  // mt-auto sticks history to the composer, and scrollHeight is honest when long.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- pin compact panes to end after LOD/hydration/row changes
+  useLayoutEffect(() => {
+    if (!compactDensity) return;
+    const node = compactScrollRef.current;
+    if (!node) return;
+    registerTimeline?.(node);
+    attachTimelineViewportElement(node);
+    node.dataset.compactRowCount = String(compactRowCount);
+    const pin = () => {
+      // Prefer marginTop slack over justify-end: justify-end + overflow fought scrollTop
+      // and left a hollow band. Safe on this plain (non-LegendList) scroller.
+      const content = node.querySelector<HTMLElement>("[data-compact-timeline-content]");
+      if (!content) return;
+      content.style.marginTop = "0px";
+      const slack = Math.max(0, node.clientHeight - content.offsetHeight);
+      content.style.marginTop = slack > 0 ? `${slack}px` : "0px";
+      node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
+      content.dataset.compactPinned = slack > 0 ? "end" : "scroll";
+    };
+    pin();
+    if (compactReadyForKeyRef.current !== listIdentityKey) {
+      compactReadyForKeyRef.current = listIdentityKey;
+      onCitationListLoad();
+      setFindListReady(true);
+    }
+    const content = node.querySelector<HTMLElement>("[data-compact-timeline-content]");
+    return observeResize(content ? [node, content] : [node], pin);
+  }, [
+    compactDensity,
+    compactRowCount,
+    listIdentityKey,
+    registerTimeline,
+    attachTimelineViewportElement,
+    onCitationListLoad,
+  ]);
 
   if (showsEmptyState) {
     if (hideEmptyPlaceholder) {
@@ -1443,8 +1502,10 @@ const ConversationTimeline = memo(function ConversationTimeline({
       <MarkdownFindContext value={findActive}>
         <TimelineRowActivityCtx value={activityState}>
           <TooltipScrollDismissArea
-            ref={attachTimelineViewportElement}
-            className="relative h-full min-h-0"
+            ref={compactDensity ? undefined : attachTimelineViewportElement}
+            className={
+              compactDensity ? "relative flex min-h-0 flex-1 flex-col" : "relative h-full min-h-0"
+            }
             data-assistant-citation-viewport="true"
           >
             {onCiteAssistantText && citationThreadRef ? (
@@ -1454,72 +1515,94 @@ const ConversationTimeline = memo(function ConversationTimeline({
                 onCite={onCiteAssistantText}
               />
             ) : null}
-            <LegendList<MessagesTimelineRow>
-              ref={setTimelineList}
-              data={rows}
-              extraData={listExtraData}
-              keyExtractor={keyExtractor}
-              getItemType={getItemType}
-              renderItem={renderItem}
-              estimatedItemSize={90}
-              initialScrollAtEnd={
-                !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
-              }
-              // Legend needs a data refresh to mount new pins without a scroll event.
-              dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
-              {...(alwaysRender ? { alwaysRender } : {})}
-              onLoad={handleListLoad}
-              {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
-              contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
-              maintainScrollAtEnd={
-                citationPositioning ||
-                (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
-                anchoredEndSpace ||
-                !liveFollowEnabled ||
-                fullscreenAppRowId !== null
-                  ? false
-                  : isWorking && !syncing && !prefersReducedMotion && settlingListIdentity === null
-                    ? TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH
-                    : TIMELINE_MAINTAIN_SCROLL_AT_END
-              }
-              maintainVisibleContentPosition={
-                findActive ||
-                citationPositioning ||
-                (restoringThreadPosition && rememberedPosition?.atEnd === false)
-                  ? false
-                  : maintainVisibleContentPosition
-              }
-              maintainScrollAtEndThreshold={1}
-              onScroll={handleScroll}
-              onItemSizeChanged={scheduleMinimapRefresh}
-              onMetricsChange={scheduleMinimapRefresh}
-              // Keyboard scrolling only moves the focused element; F6 and clicks land here.
-              tabIndex={-1}
-              data-workspace-focus-default
-              className={cn(
-                "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
-                topFadeEnabled && "topbar-scroll-fade",
-              )}
-              ListHeaderComponent={listHeader}
-              ListFooterComponent={timelineListFooter}
-            />
-            <TimelineMinimap
-              items={minimapItems}
-              hasPersistentGutter={minimapHasPersistentGutter}
-              hitStripWidth={minimapHitStripWidth}
-              currentIndex={minimapCurrentIndex}
-              atEnd={minimapAtEnd}
-              stripMap={minimapStripMap}
-              onWheel={forwardMinimapWheel}
-              onSelect={(item) => {
-                navigateTimeline();
-                void listRef.current?.scrollToIndex({
-                  index: item.rowIndex,
-                  animated: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-                  viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET,
-                });
-              }}
-            />
+            {compactDensity ? (
+              <div
+                ref={compactScrollRef}
+                tabIndex={-1}
+                data-workspace-focus-default
+                data-compact-timeline="flex"
+                className="messages-timeline-scroll scrollbar-gutter-both flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain [overflow-anchor:none]"
+                onScroll={handleScroll}
+              >
+                <div className="flex shrink-0 flex-col" data-compact-timeline-content>
+                  {listHeader}
+                  {rows.map((item) => (
+                    <div key={item.id}>{renderItem({ item })}</div>
+                  ))}
+                  {/* No list footer in compact — trailing inset was the hollow above the composer. */}
+                </div>
+              </div>
+            ) : (
+              <>
+                <LegendList<MessagesTimelineRow>
+                  ref={setTimelineList}
+                  data={rows}
+                  extraData={listExtraData}
+                  keyExtractor={keyExtractor}
+                  getItemType={getItemType}
+                  renderItem={renderItem}
+                  estimatedItemSize={90}
+                  initialScrollAtEnd={
+                    !findActive && citationRequest === null && rememberedPosition?.atEnd !== false
+                  }
+                  dataVersion={`${readyCitationRequest?.key ?? listIdentityKey}:${alwaysRenderKeys.join(",")}`}
+                  {...(alwaysRender ? { alwaysRender } : {})}
+                  onLoad={handleListLoad}
+                  {...(anchoredEndSpace ? { anchoredEndSpace } : {})}
+                  contentInsetEndAdjustment={anchoredEndSpace ? contentInsetEndAdjustment : 0}
+                  maintainScrollAtEnd={
+                    citationPositioning ||
+                    (restoringThreadPosition && rememberedPosition?.atEnd === false) ||
+                    anchoredEndSpace ||
+                    !liveFollowEnabled ||
+                    fullscreenAppRowId !== null
+                      ? false
+                      : isWorking &&
+                          !syncing &&
+                          !prefersReducedMotion &&
+                          settlingListIdentity === null
+                        ? TIMELINE_MAINTAIN_SCROLL_AT_END_SMOOTH
+                        : TIMELINE_MAINTAIN_SCROLL_AT_END
+                  }
+                  maintainVisibleContentPosition={
+                    findActive ||
+                    citationPositioning ||
+                    (restoringThreadPosition && rememberedPosition?.atEnd === false)
+                      ? false
+                      : maintainVisibleContentPosition
+                  }
+                  maintainScrollAtEndThreshold={1}
+                  onScroll={handleScroll}
+                  onItemSizeChanged={scheduleMinimapRefresh}
+                  onMetricsChange={scheduleMinimapRefresh}
+                  tabIndex={-1}
+                  data-workspace-focus-default
+                  className={cn(
+                    "messages-timeline-scroll scrollbar-gutter-both h-full min-h-0 overflow-x-hidden overscroll-y-contain [overflow-anchor:none]",
+                    topFadeEnabled && "topbar-scroll-fade",
+                  )}
+                  ListHeaderComponent={listHeader}
+                  ListFooterComponent={timelineListFooter}
+                />
+                <TimelineMinimap
+                  items={minimapItems}
+                  hasPersistentGutter={minimapHasPersistentGutter}
+                  hitStripWidth={minimapHitStripWidth}
+                  currentIndex={minimapCurrentIndex}
+                  atEnd={minimapAtEnd}
+                  stripMap={minimapStripMap}
+                  onWheel={forwardMinimapWheel}
+                  onSelect={(item) => {
+                    navigateTimeline();
+                    void listRef.current?.scrollToIndex({
+                      index: item.rowIndex,
+                      animated: !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+                      viewOffset: TIMELINE_MINIMAP_TARGET_OFFSET,
+                    });
+                  }}
+                />
+              </>
+            )}
           </TooltipScrollDismissArea>
         </TimelineRowActivityCtx>
       </MarkdownFindContext>
@@ -1626,6 +1709,7 @@ function getItemType(item: MessagesTimelineRow) {
 }
 
 const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: TimelineRow }) {
+  const compactDensity = useChatDensity() === "compact";
   const isExpandedToolGroup = row.kind === "work" && row.isExpandedToolGroup;
   const isSubagentGroup = row.kind === "event" && row.projectedItem.item.type === "subagent";
   const isWorkLogRow =
@@ -1640,24 +1724,27 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
   return (
     <div
       className={cn(
-        isWorkLogRow || isSubagentGroup
-          ? undefined
-          : row.kind === "turn-fold" || row.kind === "working"
-            ? "pb-1.5"
-            : row.kind === "message" && row.groupedWithNext
-              ? "pb-1"
-              : (row.kind === "message" &&
-                    row.message.role === "assistant" &&
-                    !row.showAssistantMeta) ||
-                  row.kind === "worktree-setup" ||
-                  row.kind === "event" ||
-                  row.kind === "attempt-fold" ||
-                  row.kind === "html-render" ||
-                  row.kind === "sent-message" ||
-                  row.kind === "mcp-app" ||
-                  row.kind === "viewed-images"
-                ? "pb-2"
-                : "pb-4",
+        // Compact canvas panes: no trailing row pad — it read as a hollow above the composer.
+        compactDensity
+          ? "pb-0"
+          : isWorkLogRow || isSubagentGroup
+            ? undefined
+            : row.kind === "turn-fold" || row.kind === "working"
+              ? "pb-1.5"
+              : row.kind === "message" && row.groupedWithNext
+                ? "pb-1"
+                : (row.kind === "message" &&
+                      row.message.role === "assistant" &&
+                      !row.showAssistantMeta) ||
+                    row.kind === "worktree-setup" ||
+                    row.kind === "event" ||
+                    row.kind === "attempt-fold" ||
+                    row.kind === "html-render" ||
+                    row.kind === "sent-message" ||
+                    row.kind === "mcp-app" ||
+                    row.kind === "viewed-images"
+                  ? "pb-2"
+                  : "pb-4",
         (row.kind === "message" && row.message.role === "assistant") ||
           row.kind === "assistant-meta"
           ? "group/assistant"
@@ -1701,7 +1788,9 @@ const TimelineRowContent = memo(function TimelineRowContent({ row }: { row: Time
       {row.kind === "message" && row.message.role === "assistant" ? (
         <AssistantTimelineRow row={row} />
       ) : null}
-      {row.kind === "assistant-meta" ? <AssistantMetaTimelineRow row={row} /> : null}
+      {row.kind === "assistant-meta" && !compactDensity ? (
+        <AssistantMetaTimelineRow row={row} />
+      ) : null}
       {row.kind === "proposed-plan" ? <ProposedPlanTimelineRow row={row} /> : null}
       {row.kind === "html-render" ? <HtmlRenderTimelineRow row={row} /> : null}
       {row.kind === "sent-message" ? <SentMessageTimelineRow row={row} /> : null}

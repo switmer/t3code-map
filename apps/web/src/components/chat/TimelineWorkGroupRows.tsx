@@ -15,6 +15,7 @@ import { observeVisibleAnimation } from "../../lib/visibleAnimation";
 import { T, useGT, useMessages } from "gt-react";
 import { memo, use, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { LegendList, type LegendListRef } from "@legendapp/list/react";
+import { useChatDensity } from "./chatDensity";
 import { workEntryDisplayIndicatesToolFailure } from "../../session-logic";
 import ChatMarkdown from "../ChatMarkdown";
 import { assetMediaActionsSource } from "./ChatMarkdownMedia";
@@ -92,11 +93,15 @@ export const WorkGroupSection = memo(function WorkGroupSection({
     );
   });
 
+  const chatDensity = useChatDensity();
+  const stackEntries = chatDensity === "compact";
+
   if (nonEmptyEntries.length === 0) return null;
   if (isExpandedToolGroup && nonEmptyEntries.every((entry) => entry.itemType === "reasoning")) {
     return <ReasoningTraceContent entries={nonEmptyEntries} />;
   }
-  if (isExpandedToolGroup) {
+  // Compact panes: plain stacked rows (no nested LegendList / 18rem hollow).
+  if (isExpandedToolGroup && !stackEntries) {
     return (
       <ExpandedWorkGroupEntries
         key={`${routeThreadKey}:${anchorKey}`}

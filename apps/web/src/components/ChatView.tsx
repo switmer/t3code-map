@@ -3621,14 +3621,17 @@ export default function ChatView(props: ChatViewProps) {
                   anchorMessageId={timelineAnchorMessageId}
                   onAnchorReady={onTimelineAnchorReadyStable}
                   onAnchorSizeChanged={onTimelineAnchorSizeChangedStable}
-                  contentInsetEndAdjustment={composerTimelineInset}
+                  // Compact panes keep the composer in normal flow (see agentCanvas.css), so
+                  // no absolute-overlay inset — that inset was the dead space above the composer.
+                  contentInsetEndAdjustment={chatDensity === "compact" ? 0 : composerTimelineInset}
                   liveFollowEnabled={timelineLiveFollowEnabled}
                   onIsAtEndChange={onIsAtEndChangeStable}
                   onViewportAttach={attachTimelineViewport}
                   onFooterGrow={onTimelineFooterGrowStable}
                   hideEmptyPlaceholder={isDraftHeroState || threadDetailLoading}
-                  emptyPlaceholderInset={composerReservedHeight}
-                  topFadeEnabled={chatDensity === "compact" || !hasTimelineTopBanner}
+                  emptyPlaceholderInset={chatDensity === "compact" ? 0 : composerReservedHeight}
+                  // Compact canvas panes: no top fade (it hid real rows). Divider + alignItemsAtEnd instead.
+                  topFadeEnabled={chatDensity !== "compact" && !hasTimelineTopBanner}
                   {...(threadHistoryControls === undefined
                     ? {}
                     : { historyControls: threadHistoryControls })}
@@ -3659,7 +3662,11 @@ export default function ChatView(props: ChatViewProps) {
               className={
                 isDraftHeroState
                   ? "pointer-events-none absolute inset-0 z-20 flex items-center [@media(max-height:34rem)]:items-end"
-                  : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
+                  : chatDensity === "compact"
+                    ? // In-flow under the timeline so short history can sit flush on the composer.
+                      // Absolute + contentInset was the dead band Steve flagged in canvas panes.
+                      "pointer-events-none relative z-20 shrink-0"
+                    : "pointer-events-none absolute inset-x-0 bottom-0 z-20 pt-1.5 sm:pt-2"
               }
             >
               <div ref={draftHeroTransitionGroupRef} className="chat-composer-lane w-full">
