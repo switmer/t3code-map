@@ -1,22 +1,50 @@
-import type { AgentCanvasNodeLayout, AgentCanvasView } from "../../agentCanvasStore";
-import { DEFAULT_AGENT_NODE_SIZE } from "../../agentCanvasStore";
+import type {
+  AgentCanvasEdge,
+  AgentCanvasEdgeKind,
+  AgentCanvasNodeLayout,
+  AgentCanvasNote,
+  AgentCanvasRole,
+  AgentCanvasView,
+} from "../../agentCanvasStore";
+import {
+  DEFAULT_AGENT_NODE_SIZE,
+  DEFAULT_NOTE_SIZE,
+  MAX_AGENT_NODE_SIZE,
+  MIN_AGENT_NODE_SIZE,
+} from "../../agentCanvasStore";
 
 export type AgentCanvasLod = "interactive" | "preview" | "chip";
 
-const NODE_GAP = 48;
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 2.5;
+const NODE_GAP_X = 72;
+const NODE_GAP_Y = 72;
+const COLUMNS = 3;
+
+export function agentFlowId(threadKey: string): string {
+  return `agent:${threadKey}`;
+}
+
+export function noteFlowId(noteId: string): string {
+  return `note:${noteId}`;
+}
+
+export function parseAgentFlowId(id: string): string | null {
+  return id.startsWith("agent:") ? id.slice("agent:".length) : null;
+}
+
+export function parseNoteFlowId(id: string): string | null {
+  return id.startsWith("note:") ? id.slice("note:".length) : null;
+}
 
 /** Grid placement for threads that have never been moved on the canvas. */
 export function defaultAgentNodeLayout(index: number): AgentCanvasNodeLayout {
-  const columns = Math.max(1, Math.ceil(Math.sqrt(index + 1)));
-  const col = index % columns;
-  const row = Math.floor(index / columns);
+  const col = index % COLUMNS;
+  const row = Math.floor(index / COLUMNS);
   return {
-    x: col * (DEFAULT_AGENT_NODE_SIZE.width + NODE_GAP),
-    y: row * (DEFAULT_AGENT_NODE_SIZE.height + NODE_GAP),
+    x: col * (DEFAULT_AGENT_NODE_SIZE.width + NODE_GAP_X),
+    y: row * (DEFAULT_AGENT_NODE_SIZE.height + NODE_GAP_Y),
     width: DEFAULT_AGENT_NODE_SIZE.width,
     height: DEFAULT_AGENT_NODE_SIZE.height,
+    role: "none",
   };
 }
 
@@ -24,58 +52,37 @@ export function resolveAgentNodeLayout(
   index: number,
   saved: AgentCanvasNodeLayout | undefined,
 ): AgentCanvasNodeLayout {
-  return saved ?? defaultAgentNodeLayout(index);
-}
-
-/** Zoom keeping the canvas point under `anchor` fixed on screen. */
-export function zoomAgentCanvasView(
-  view: AgentCanvasView,
-  factor: number,
-  anchor: { readonly x: number; readonly y: number },
-): AgentCanvasView {
-  const scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale * factor));
-  const ratio = scale / view.scale;
+  if (saved === undefined) return defaultAgentNodeLayout(index);
   return {
-    scale,
-    x: anchor.x - (anchor.x - view.x) * ratio,
-    y: anchor.y - (anchor.y - view.y) * ratio,
+    ...saved,
+    width: Math.min(MAX_AGENT_NODE_SIZE.width, Math.max(MIN_AGENT_NODE_SIZE.width, saved.width)),
+    height: Math.min(
+      MAX_AGENT_NODE_SIZE.height,
+      Math.max(MIN_AGENT_NODE_SIZE.height, saved.height),
+    ),
   };
 }
 
-export function panAgentCanvasView(view: AgentCanvasView, dx: number, dy: number): AgentCanvasView {
-  return { ...view, x: view.x + dx, y: view.y + dy };
-}
-
-export function nodeScreenRect(
-  layout: AgentCanvasNodeLayout,
-  view: AgentCanvasView,
-): {
-  readonly left: number;
-  readonly top: number;
-  readonly right: number;
-  readonly bottom: number;
-} {
+export function defaultNotePlacement(
+  existingCount: number,
+): Pick<AgentCanvasNote, "x" | "y" | "width" | "height"> {
   return {
-    left: layout.x * view.scale + view.x,
-    top: layout.y * view.scale + view.y,
-    right: (layout.x + layout.width) * view.scale + view.x,
-    bottom: (layout.y + layout.height) * view.scale + view.y,
+    x: 48 + (existingCount % 4) * (DEFAULT_NOTE_SIZE.width + 32),
+    y: 48 + Math.floor(existingCount / 4) * (DEFAULT_NOTE_SIZE.height + 32),
+    width: DEFAULT_NOTE_SIZE.width,
+    height: DEFAULT_NOTE_SIZE.height,
   };
 }
 
-export function isNodeOnScreen(
-  layout: AgentCanvasNodeLayout,
-  view: AgentCanvasView,
-  viewport: { readonly width: number; readonly height: number },
-  margin = 80,
-): boolean {
-  const rect = nodeScreenRect(layout, view);
-  return (
-    rect.right >= -margin &&
-    rect.bottom >= -margin &&
-    rect.left <= viewport.width + margin &&
-    rect.top <= viewport.height + margin
-  );
+export function clampAgentNodeLayout(layout: AgentCanvasNodeLayout): AgentCanvasNodeLayout {
+  return {
+    ...layout,
+    width: Math.min(MAX_AGENT_NODE_SIZE.width, Math.max(MIN_AGENT_NODE_SIZE.width, layout.width)),
+    height: Math.min(
+      MAX_AGENT_NODE_SIZE.height,
+      Math.max(MIN_AGENT_NODE_SIZE.height, layout.height),
+    ),
+  };
 }
 
 /**
@@ -85,19 +92,65 @@ export function isNodeOnScreen(
 export function agentCanvasLod(input: {
   readonly focused: boolean;
   readonly onScreen: boolean;
-  readonly scale: number;
+  readonly zoom: number;
 }): AgentCanvasLod {
   if (!input.onScreen) return "chip";
-  if (input.scale < 0.45) return "chip";
-  if (input.focused && input.scale >= 0.55) return "interactive";
+  if (input.zoom < 0.4) return "chip";
+  if (input.focused && input.zoom >= 0.55) return "interactive";
   return "preview";
 }
 
-export function clampAgentNodeLayout(layout: AgentCanvasNodeLayout): AgentCanvasNodeLayout {
-  return {
-    x: Math.max(0, layout.x),
-    y: Math.max(0, layout.y),
-    width: Math.min(1200, Math.max(240, layout.width)),
-    height: Math.min(1200, Math.max(180, layout.height)),
-  };
+export function isNodeOnScreen(
+  layout: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  view: AgentCanvasView,
+  viewport: { readonly width: number; readonly height: number },
+  margin = 120,
+): boolean {
+  const left = layout.x * view.zoom + view.x;
+  const top = layout.y * view.zoom + view.y;
+  const right = (layout.x + layout.width) * view.zoom + view.x;
+  const bottom = (layout.y + layout.height) * view.zoom + view.y;
+  return (
+    right >= -margin &&
+    bottom >= -margin &&
+    left <= viewport.width + margin &&
+    top <= viewport.height + margin
+  );
+}
+
+export function newCanvasEdgeId(source: string, target: string): string {
+  return `e:${source}->${target}`;
+}
+
+export function resolveEdgeKind(input: {
+  readonly sourceRole: AgentCanvasRole;
+  readonly explicitKind?: AgentCanvasEdgeKind;
+}): AgentCanvasEdgeKind {
+  if (input.explicitKind !== undefined) return input.explicitKind;
+  if (input.sourceRole === "lead" || input.sourceRole === "coordinator") return "lead";
+  return "link";
+}
+
+/** Worker thread keys connected from a lead/coordinator (outgoing lead edges). */
+export function workerKeysForLead(
+  leadThreadKey: string,
+  edges: ReadonlyArray<AgentCanvasEdge>,
+): string[] {
+  const leadId = agentFlowId(leadThreadKey);
+  const workers: string[] = [];
+  for (const edge of edges) {
+    if (edge.kind !== "lead" || edge.source !== leadId) continue;
+    const target = parseAgentFlowId(edge.target);
+    if (target !== null) workers.push(target);
+  }
+  return workers;
+}
+
+export function createNoteId(): string {
+  return `n_${Math.random().toString(36).slice(2, 10)}`;
 }

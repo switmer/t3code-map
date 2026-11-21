@@ -1102,6 +1102,41 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   background-size: var(--surface-grain-size);
 }
 
+/* React Flow marker classes — matched by @xyflow/react; display stays unchanged. */
+@utility nodrag {
+  --xy-marker: nodrag;
+}
+@utility nopan {
+  --xy-marker: nopan;
+}
+@utility nowheel {
+  --xy-marker: nowheel;
+}
+@utility drag-handle {
+  --xy-marker: drag-handle;
+}
+@utility agent-canvas-flow {
+  --xy-marker: agent-canvas-flow;
+}
+@utility agent-canvas-node-shadow {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 4%),
+    0 8px 24px -12px rgb(0 0 0 / 18%);
+}
+@utility agent-canvas-node-shadow-dark {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 35%),
+    0 14px 36px -16px rgb(0 0 0 / 70%);
+}
+@utility agent-canvas-note-shadow {
+  box-shadow:
+    0 1px 2px rgb(0 0 0 / 5%),
+    0 10px 28px -18px rgb(0 0 0 / 28%);
+}
+@utility agent-canvas-status-pulse {
+  position: relative;
+}
+
 /* Suppress all transitions during theme changes */
 .no-transitions,
 .no-transitions *,

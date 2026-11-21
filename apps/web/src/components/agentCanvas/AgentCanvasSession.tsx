@@ -41,6 +41,7 @@ export function AgentCanvasSession(props: {
     <div
       className="flex h-full min-h-0 flex-col overflow-hidden bg-background"
       data-agent-canvas-session={scopedThreadKey(threadRef)}
+      onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="min-h-0 flex-1 overflow-hidden">
         <BackgroundThreadContext value={!props.active}>

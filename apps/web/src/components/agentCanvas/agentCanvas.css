@@ -1,0 +1,147 @@
+/* Theme React Flow to the app's design tokens. Scoped under the agent canvas root. */
+.agent-canvas-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-radius: var(--radius-xl);
+  --xy-node-boxshadow-default: none;
+  --xy-node-boxshadow-selected: none;
+  --xy-edge-stroke: color-mix(in oklab, var(--color-border) 70%, var(--color-foreground));
+  --xy-edge-stroke-width: 1.75;
+  --xy-edge-stroke-selected: var(--color-primary);
+  --xy-connectionline-stroke: var(--color-primary);
+  --xy-connectionline-stroke-width: 2;
+  --xy-selection-background-color: color-mix(in oklab, var(--color-primary) 10%, transparent);
+  --xy-selection-border: 1px solid color-mix(in oklab, var(--color-primary) 40%, transparent);
+  --xy-minimap-background-color: color-mix(in oklab, var(--color-popover) 94%, transparent);
+  --xy-minimap-mask-background-color: color-mix(in oklab, var(--color-foreground) 14%, transparent);
+  --xy-minimap-node-background-color: var(--color-muted);
+  --xy-minimap-node-stroke-color: var(--color-border);
+  --xy-controls-button-background-color: var(--color-popover);
+  --xy-controls-button-border-color: var(--color-border);
+  --xy-controls-button-color: var(--color-foreground);
+  --xy-controls-button-background-color-hover: var(--color-muted);
+  --xy-attribution-background-color: transparent;
+}
+
+.agent-canvas-flow .react-flow__attribution {
+  display: none;
+}
+
+.agent-canvas-flow .react-flow__node {
+  transition:
+    box-shadow 140ms ease,
+    filter 140ms ease;
+}
+
+.agent-canvas-flow .react-flow__node.selected,
+.agent-canvas-flow .react-flow__node:focus-within {
+  z-index: 2;
+}
+
+.agent-canvas-flow .react-flow__handle {
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease;
+  cursor: crosshair;
+}
+
+.agent-canvas-flow .react-flow__handle:hover,
+.agent-canvas-flow .react-flow__handle:focus-visible {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 28%, transparent);
+}
+
+.agent-canvas-flow .react-flow__edge.lead path {
+  stroke: var(--color-primary);
+  stroke-width: 2.35;
+}
+
+.agent-canvas-flow .react-flow__edge.lead.animated path {
+  stroke-dasharray: 7 5;
+  animation: agent-canvas-edge-flow 0.85s linear infinite;
+}
+
+.agent-canvas-flow .react-flow__edge.link path {
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 45%, var(--color-border));
+  stroke-width: 1.5;
+  stroke-dasharray: 2 4;
+}
+
+.agent-canvas-flow .react-flow__edge.selected path {
+  stroke: var(--color-primary);
+}
+
+.agent-canvas-flow .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+.agent-canvas-flow .react-flow__controls {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow-composer);
+  border: 1px solid var(--color-border);
+}
+
+.agent-canvas-flow .react-flow__minimap {
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-composer);
+  backdrop-filter: blur(8px);
+}
+
+.agent-canvas-flow .react-flow__resize-control.handle {
+  cursor: nwse-resize;
+}
+
+.agent-canvas-flow .react-flow__resize-control.handle.top-left,
+.agent-canvas-flow .react-flow__resize-control.handle.bottom-right {
+  cursor: nwse-resize;
+}
+
+.agent-canvas-flow .react-flow__resize-control.handle.top-right,
+.agent-canvas-flow .react-flow__resize-control.handle.bottom-left {
+  cursor: nesw-resize;
+}
+
+.agent-canvas-status-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 35%, transparent);
+  animation: agent-canvas-status-pulse 1.6s ease-out infinite;
+}
+
+@keyframes agent-canvas-edge-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+@keyframes agent-canvas-status-pulse {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.85);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.55);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-canvas-flow .react-flow__edge.lead.animated path,
+  .agent-canvas-status-pulse::after {
+    animation: none;
+  }
+
+  .agent-canvas-flow .react-flow__node,
+  .agent-canvas-flow .react-flow__handle {
+    transition: none;
+  }
+}
