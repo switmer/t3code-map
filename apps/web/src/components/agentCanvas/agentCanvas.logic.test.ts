@@ -50,10 +50,10 @@ describe("agent canvas layout", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
     const first = defaultWorkerLayoutForLead(lead, 0);
     const second = defaultWorkerLayoutForLead(lead, 1);
-    expect(first.x).toBe(lead.x + lead.width + 72);
+    expect(first.x).toBe(lead.x + lead.width + 88);
     expect(first.y).toBe(lead.y);
-    expect(second.y).toBe(first.y);
-    expect(second.x).toBeGreaterThan(first.x + first.width);
+    expect(second.x).toBe(first.x);
+    expect(second.y).toBeGreaterThan(first.y + first.height);
   });
 
   it("picks lod from visibility and zoom (all on-screen agents interactive at normal zoom)", () => {

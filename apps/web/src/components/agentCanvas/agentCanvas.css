@@ -159,13 +159,20 @@
   border-radius: 2px !important;
 }
 
-/* Compact chrome inside live canvas thread nodes. */
+/*
+ * Compact density for canvas ChatViews — IDE/Warp pane, not a scaled full-page chat.
+ * Full-page ChatView is unchanged; only `[data-chat-density=compact]` (canvas sessions).
+ */
 [data-agent-canvas-session] {
-  font-size: var(--text-xs);
+  --chat-content-max-width: 100%;
+  --chat-lane-inset-start: 0px;
+  --chat-lane-inset-end: 0px;
+  --chat-timeline-gutter: 0px;
+  --chat-compact-pad: 0.4rem;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
-/* ChatView roots with flex-1; the session column must be a flex parent so the pane fills
-   and the absolute composer overlay stays pinned to the visible bottom. */
 [data-agent-canvas-session] > .flex {
   min-height: 0;
 }
@@ -180,11 +187,11 @@
   inset-inline: 0;
   bottom: 0;
   z-index: 20;
+  padding-top: 0 !important;
 }
 
-/* Unfocused nodes keep a real composer, just quieter until clicked. */
 [data-agent-canvas-session][data-agent-canvas-session-active="false"] [data-chat-composer-overlay] {
-  opacity: 0.82;
+  opacity: 0.78;
 }
 
 [data-agent-canvas-session][data-agent-canvas-session-active="false"]:focus-within
@@ -193,28 +200,278 @@
   opacity: 1;
 }
 
+/* Full width — no centered narrow column. */
+[data-chat-density="compact"] .chat-content-lane,
+[data-chat-density="compact"] [data-chat-composer-stack] {
+  margin-inline: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+[data-chat-density="compact"] .chat-composer-lane,
+[data-chat-density="compact"][data-chat-canvas] .messages-timeline-scroll,
+[data-chat-density="compact"] .messages-timeline-scroll {
+  padding-inline: var(--chat-compact-pad) !important;
+}
+
+@media (min-width: 640px) {
+  [data-chat-density="compact"] .chat-composer-lane,
+  [data-chat-density="compact"][data-chat-canvas] .messages-timeline-scroll,
+  [data-chat-density="compact"] .messages-timeline-scroll {
+    padding-inline: var(--chat-compact-pad) !important;
+  }
+}
+
+/* Hide timeline tick/minimap gutter in compact panes. */
+[data-chat-density="compact"] [data-testid="timeline-minimap"] {
+  display: none !important;
+}
+
+[data-chat-density="compact"] .messages-timeline-scroll {
+  scrollbar-gutter: auto;
+}
+
+/* Dense message rows. */
+[data-chat-density="compact"] [data-timeline-row-id] {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[data-chat-density="compact"] [data-timeline-row-id] .group\/timeline-row,
+[data-chat-density="compact"] .group\/timeline-row {
+  border-bottom-color: transparent !important;
+  padding-block: 0.15rem 0.25rem !important;
+  padding-inline-end: 0 !important;
+}
+
+[data-chat-density="compact"] [data-user-message-bubble] {
+  max-width: 100% !important;
+  width: 100% !important;
+  border-radius: 0 !important;
+  padding: 0.1rem 0 !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Folded "Agent …" pills → dense single-line rows (no floating chrome). */
+[data-chat-density="compact"] [data-user-message-bubble] > button {
+  gap: 0.35rem !important;
+  border-radius: 0.25rem !important;
+  padding: 0.15rem 0.25rem !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  background: color-mix(in oklab, var(--color-muted) 45%, transparent) !important;
+}
+
+[data-chat-density="compact"] [data-user-message-bubble] > button svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
+}
+
+[data-chat-density="compact"] [data-user-message-attribution],
+[data-chat-density="compact"] [data-user-message-footer] {
+  display: none !important;
+}
+
+[data-chat-density="compact"] [data-user-message-body] {
+  border-inline-start: 2px solid color-mix(in oklab, var(--color-primary) 55%, transparent);
+  padding-inline-start: 0.45rem;
+  margin-inline-start: 0;
+}
+
+[data-chat-density="compact"] [data-user-message-attribution="agent"],
+[data-chat-density="compact"] .group[data-user-message-attribution="agent"] {
+  align-items: stretch !important;
+  width: 100%;
+}
+
+[data-chat-density="compact"] .prose,
+[data-chat-density="compact"] .prose p,
+[data-chat-density="compact"] .user-message-markdown,
+[data-chat-density="compact"] .assistant-message-markdown {
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+[data-chat-density="compact"] .prose h1,
+[data-chat-density="compact"] .prose h2,
+[data-chat-density="compact"] .prose h3,
+[data-chat-density="compact"] .prose h4,
+[data-chat-density="compact"] .assistant-message-markdown h1,
+[data-chat-density="compact"] .assistant-message-markdown h2,
+[data-chat-density="compact"] .assistant-message-markdown h3,
+[data-chat-density="compact"] .assistant-message-markdown h4,
+[data-chat-density="compact"] [data-timeline-row-id] h1,
+[data-chat-density="compact"] [data-timeline-row-id] h2,
+[data-chat-density="compact"] [data-timeline-row-id] h3 {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  margin-block: 0.25rem 0.15rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="work-toggle"] {
+  font-size: 11px !important;
+}
+
+[data-chat-density="compact"] .prose pre,
+[data-chat-density="compact"] pre {
+  margin-block: 0.25rem !important;
+  padding: 0.35rem 0.45rem !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  border-radius: 0.3rem !important;
+}
+
+[data-chat-density="compact"] .prose code,
+[data-chat-density="compact"] code {
+  font-size: 11px !important;
+}
+
+[data-chat-density="compact"] .prose ul,
+[data-chat-density="compact"] .prose ol {
+  margin-block: 0.2rem !important;
+  padding-inline-start: 1.1rem !important;
+}
+
+[data-chat-density="compact"] .prose li {
+  margin-block: 0.05rem !important;
+}
+
+/* Tool / work folds → single-line dense rows. */
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] button,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] button,
+[data-chat-density="compact"] [data-timeline-row-kind="work-toggle"] button {
+  min-height: 1.25rem !important;
+  gap: 0.3rem !important;
+  padding-block: 0.05rem !important;
+  padding-inline: 0.15rem !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  border-radius: 0.2rem !important;
+}
+
+/* Collapse tool-call label ↔ meta gutters (Read …… 1 file). */
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] button > span:last-child,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] button > span:last-child {
+  margin-inline-start: 0.35rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] .ms-auto,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] .ms-auto,
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] [class*="ml-auto"],
+[data-chat-density="compact"] [data-timeline-row-kind="work"] [class*="ml-auto"] {
+  margin-inline-start: 0.5rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] svg,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] svg,
+[data-chat-density="compact"] [data-timeline-row-kind="work-toggle"] svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="message"] {
+  margin-block: 0.1rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .group {
+  max-width: 100% !important;
+}
+
+/* Compact pinned composer. */
+[data-chat-density="compact"] [data-chat-composer-surface="true"] {
+  border-radius: 0 !important;
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 85%, transparent) !important;
+  box-shadow: none !important;
+  background: color-mix(in oklab, var(--color-background) 92%, var(--color-muted)) !important;
+  padding-block: 0 !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-surface="true"]::before,
+[data-chat-density="compact"] [data-chat-composer-surface="true"]::after {
+  display: none !important;
+}
+
+[data-chat-density="compact"] .composer-tiptap {
+  min-height: calc(1.25lh + 0.25rem) !important;
+  max-height: calc(4lh + 0.5rem) !important;
+  padding: 0.2rem 0.15rem !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-footer="true"],
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] {
+  gap: 0.2rem !important;
+  padding: 0.15rem 0.35rem 0.3rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] button,
+[data-chat-density="compact"] [data-chat-composer-footer="true"] button {
+  height: 1.35rem !important;
+  min-height: 1.35rem !important;
+  width: auto !important;
+  max-width: 5.5rem !important;
+  padding-inline: 0.25rem !important;
+  font-size: 10px !important;
+  border-radius: 0.25rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] button[aria-label*="Send"],
+[data-chat-density="compact"] [data-chat-composer-footer="true"] button[aria-label*="Send"],
+[data-chat-density="compact"] button[aria-label*="Send message"],
+[data-chat-density="compact"] button[aria-label*="Stop"] {
+  width: 1.35rem !important;
+  height: 1.35rem !important;
+  min-width: 1.35rem !important;
+  max-width: 1.35rem !important;
+  border-radius: 0.25rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] svg,
+[data-chat-density="compact"] [data-chat-composer-footer="true"] svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
+}
+
+/* Model / mode chips stay icon-first in compact panes. */
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] [data-slot="button"],
+[data-chat-density="compact"] [data-chat-composer-footer="true"] [data-slot="button"] {
+  gap: 0.2rem !important;
+}
+
+/* Quieter chrome: hide bulky banners / shoulder tabs when possible. */
+[data-chat-density="compact"] [data-composer-shoulder-tab],
+[data-chat-density="compact"] [data-chat-composer-resting-images="true"] {
+  display: none !important;
+}
+
 [data-agent-canvas-session] .chat-banner-lane {
-  left: 0.5rem;
-  right: 0.5rem;
+  left: 0.35rem;
+  right: 0.35rem;
   width: auto;
 }
 
 [data-agent-canvas-session] .chat-banner-lane > div {
   margin-inline: 0;
   max-width: 100%;
-  padding-top: 0.4rem;
+  padding-top: 0.25rem;
   width: 100%;
 }
 
 [data-agent-canvas-session] .chat-banner-lane [data-slot="alert"] {
-  gap: 0.4rem;
-  padding: 0.4rem 0.55rem;
+  gap: 0.25rem;
+  padding: 0.3rem 0.4rem;
   box-shadow: none;
 }
 
 [data-agent-canvas-session] .chat-banner-lane [data-slot="alert-title"],
 [data-agent-canvas-session] .chat-banner-lane [data-slot="alert-description"] {
-  font-size: var(--text-2xs);
+  font-size: 10px;
   line-height: 1.3;
 }
 

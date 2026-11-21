@@ -20,9 +20,9 @@ export const AGENT_CANVAS_INTERACTIVE_ZOOM = 0.55;
 
 const NODE_GAP_X = 72;
 const NODE_GAP_Y = 56;
-const COLUMNS = 2;
-const LEAD_TO_WORKER_GAP_X = 72;
-const WORKER_COLUMN_GAP_X = 56;
+const COLUMNS = 3;
+const LEAD_TO_WORKER_GAP_X = 88;
+const WORKER_STACK_GAP_Y = 28;
 const DEFAULT_WORKER_NODE_SIZE = { width: 380, height: 340 } as const;
 /** Nodes parked farther than this are ignored by fit-view / minimap framing. */
 const AGENT_CANVAS_SCENE_BOUND = 2800;
@@ -57,20 +57,15 @@ export function defaultAgentNodeLayout(index: number): AgentCanvasNodeLayout {
 }
 
 /**
- * Place workers in columns to the right of the lead so a lead + 3 workers (~4 columns)
- * still frames at interactive zoom on a typical ~1500px-wide window.
+ * Place workers in a vertical stack to the right of the lead (org-chart / fan-out).
  */
 export function defaultWorkerLayoutForLead(
   lead: Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height">,
   workerIndex: number,
 ): Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height"> {
   return {
-    x:
-      lead.x +
-      lead.width +
-      LEAD_TO_WORKER_GAP_X +
-      workerIndex * (DEFAULT_WORKER_NODE_SIZE.width + WORKER_COLUMN_GAP_X),
-    y: lead.y,
+    x: lead.x + lead.width + LEAD_TO_WORKER_GAP_X,
+    y: lead.y + workerIndex * (DEFAULT_WORKER_NODE_SIZE.height + WORKER_STACK_GAP_Y),
     width: DEFAULT_WORKER_NODE_SIZE.width,
     height: DEFAULT_WORKER_NODE_SIZE.height,
   };

@@ -10,9 +10,10 @@ import { primaryServerKeybindingsAtom } from "../../state/server";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../../terminalUiStateStore";
 import ChatView from "../ChatView";
 import { BackgroundThreadContext } from "../chat/backgroundThread";
+import { ChatDensityProvider } from "../chat/chatDensity";
 import { PersistentThreadTerminalDrawer } from "../PersistentThreadTerminals";
 
-/** Canvas ChatView mount: flex column pins the absolute composer; `active` owns shortcuts. */
+/** Canvas ChatView mount: compact density + pinned composer; `active` owns shortcuts. */
 export function AgentCanvasSession(props: {
   readonly environmentId: EnvironmentId;
   readonly threadId: ThreadId;
@@ -39,23 +40,26 @@ export function AgentCanvasSession(props: {
       className="nodrag nowheel nopan flex h-full min-h-0 flex-col overflow-hidden bg-background"
       data-agent-canvas-session={scopedThreadKey(threadRef)}
       data-agent-canvas-session-active={props.active ? "true" : "false"}
+      data-chat-density="compact"
       data-side-chat-pane={props.threadId}
       onPointerDown={(event) => event.stopPropagation()}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <BackgroundThreadContext value={!props.active}>
-          <ComposerHandleContext value={null}>
-            <ChatView
-              environmentId={props.environmentId}
-              threadId={props.threadId}
-              routeKind="server"
-              embedded={parentPanel}
-            />
-          </ComposerHandleContext>
-        </BackgroundThreadContext>
+        <ChatDensityProvider value="compact">
+          <BackgroundThreadContext value={!props.active}>
+            <ComposerHandleContext value={null}>
+              <ChatView
+                environmentId={props.environmentId}
+                threadId={props.threadId}
+                routeKind="server"
+                embedded={parentPanel}
+              />
+            </ComposerHandleContext>
+          </BackgroundThreadContext>
+        </ChatDensityProvider>
       </div>
       {terminalOpen && props.active ? (
-        <div className="h-40 shrink-0 border-t border-border">
+        <div className="h-32 shrink-0 border-t border-border">
           <PersistentThreadTerminalDrawer
             threadRef={threadRef}
             threadId={props.threadId}

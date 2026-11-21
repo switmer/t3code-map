@@ -244,14 +244,16 @@ function AgentCanvasFlow() {
       height: layout.height,
     }));
     void fitView({
-      padding: 0.14,
+      padding: 0.28,
       duration: 0,
       nodes: frameNodes,
-      minZoom: AGENT_CANVAS_INTERACTIVE_ZOOM,
+      // Allow preview LOD when many nodes must fit; interactive rehydrates when zoomed in.
+      minZoom: 0.35,
       maxZoom: 1,
     }).then(() => {
       const next = getViewport();
-      const cleared = { x: next.x, y: next.y + 12, zoom: next.zoom };
+      // Shift left/up slightly so minimap + toolbar don't eat the right/bottom pad.
+      const cleared = { x: next.x - 18, y: next.y + 4, zoom: next.zoom };
       void setViewport(cleared, { duration: 0 }).then(() => {
         setView(cleared);
       });
@@ -656,13 +658,14 @@ function AgentCanvasFlow() {
   const zoomPercent = Math.round(view.zoom * 100);
   const panMode = tool === "pan";
   const sceneNodes = flowNodes.filter((node) => isInCanvasScene(node.position));
+  const sceneAgentCount = sceneNodes.filter((node) => node.type === "agent").length;
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border/70 px-3">
         <h1 className="text-sm font-medium tracking-tight">{gt("Agent canvas")}</h1>
         <span className="text-2xs text-muted-foreground">
-          {gt("{count, plural, one {# agent} other {# agents}}", { count: threads.length })}
+          {gt("{count, plural, one {# agent} other {# agents}}", { count: sceneAgentCount })}
         </span>
         <div className="ml-auto">
           <Button size="xs" variant="ghost" onClick={() => setMode("normal")}>
@@ -759,15 +762,15 @@ function AgentCanvasFlow() {
                 aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
                 onClick={() => {
                   void fitView({
-                    padding: 0.14,
+                    padding: 0.28,
                     duration: 220,
                     nodes: sceneNodes,
-                    minZoom: AGENT_CANVAS_INTERACTIVE_ZOOM,
+                    minZoom: 0.35,
                     maxZoom: 1,
                   }).then(() => {
                     const next = getViewport();
-                    // Small upward nudge so the floating toolbar stays clear of the cluster.
-                    const cleared = { x: next.x, y: next.y + 14, zoom: next.zoom };
+                    // Shift left/up slightly so minimap + toolbar don't eat the right/bottom pad.
+                    const cleared = { x: next.x - 18, y: next.y + 6, zoom: next.zoom };
                     void setViewport(cleared, { duration: 0 }).then(() => {
                       setView(cleared);
                     });

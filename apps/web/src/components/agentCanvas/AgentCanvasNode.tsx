@@ -245,65 +245,66 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       <Handle type="source" position={Position.Right} id="out" className="!-right-1" />
       <Handle type="source" position={Position.Bottom} id="out-bottom" className="!-bottom-1" />
 
-      <div className="drag-handle flex shrink-0 cursor-grab flex-col gap-0.5 border-b border-border/60 px-2.5 py-1.5 active:cursor-grabbing">
-        <div className="flex items-start gap-1.5">
-          <StatusDot tone={tone} />
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <button
-                  type="button"
-                  className="min-w-0 flex-1 py-0.5 text-left text-sm leading-snug font-medium tracking-tight whitespace-normal outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                  onClick={data.onFocus}
-                />
-              }
-            >
-              <span className="line-clamp-2 wrap-break-word">{title}</span>
-            </TooltipTrigger>
-            <TooltipPopup>{title}</TooltipPopup>
-          </Tooltip>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  size="icon-micro"
-                  variant="ghost-muted"
-                  className="shrink-0"
-                  aria-label={gt("Node actions")}
-                />
-              }
-            >
-              <MoreHorizontalIcon className="size-3.5" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-40">
-              <DropdownMenuItem onClick={data.onFocus}>{gt("Open live session")}</DropdownMenuItem>
-              {(
-                [
-                  ["none", gt("No role")],
-                  ["lead", gt("Lead")],
-                  ["coordinator", gt("Coordinator")],
-                  ["worker", gt("Worker")],
-                ] as const
-              ).map(([role, label]) => (
-                <DropdownMenuItem
-                  key={role}
-                  onClick={() => {
-                    pushHistory();
-                    setAgentRole(threadKey, role);
-                  }}
-                >
-                  {label}
-                </DropdownMenuItem>
-              ))}
-              {isLeadLike && workers.length > 0 ? (
-                <DropdownMenuItem onClick={() => setBroadcastOpen(true)}>
-                  {gt("Send to workers")}
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-        <p className="truncate pl-3.5 text-2xs text-muted-foreground">{modelLabel}</p>
+      <div className="drag-handle flex h-7 shrink-0 cursor-grab items-center gap-1.5 border-b border-border/60 px-2 active:cursor-grabbing">
+        <StatusDot tone={tone} />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <button
+                type="button"
+                className="min-w-0 flex-1 truncate py-0.5 text-left text-xs leading-none font-medium tracking-tight outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                onClick={data.onFocus}
+              />
+            }
+          >
+            <span className="truncate">{title}</span>
+          </TooltipTrigger>
+          <TooltipPopup>{title}</TooltipPopup>
+        </Tooltip>
+        <span className="max-w-20 shrink-0 truncate font-mono text-3xs text-muted-foreground">
+          {modelLabel}
+        </span>
+        <RolePill role={data.role} />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                size="icon-micro"
+                variant="ghost-muted"
+                className="shrink-0"
+                aria-label={gt("Node actions")}
+              />
+            }
+          >
+            <MoreHorizontalIcon className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-40">
+            <DropdownMenuItem onClick={data.onFocus}>{gt("Open live session")}</DropdownMenuItem>
+            {(
+              [
+                ["none", gt("No role")],
+                ["lead", gt("Lead")],
+                ["coordinator", gt("Coordinator")],
+                ["worker", gt("Worker")],
+              ] as const
+            ).map(([role, label]) => (
+              <DropdownMenuItem
+                key={role}
+                onClick={() => {
+                  pushHistory();
+                  setAgentRole(threadKey, role);
+                }}
+              >
+                {label}
+              </DropdownMenuItem>
+            ))}
+            {isLeadLike && workers.length > 0 ? (
+              <DropdownMenuItem onClick={() => setBroadcastOpen(true)}>
+                {gt("Send to workers")}
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {broadcastOpen ? (
