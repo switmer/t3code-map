@@ -96,7 +96,6 @@ import {
   fleetStacks,
   fleetTwoWayLinks,
   type FleetArrow,
-  type FleetCanvasPositions,
   type FleetColumn,
   type FleetDirection,
   type FleetEnvironmentInput,
@@ -110,7 +109,6 @@ import {
   type FleetLinkEdge,
   type FleetLinkOffer,
   type FleetNode,
-  type FleetPoint,
   type FleetRect,
   type FleetRouteEdge,
   type FleetRouteState,
@@ -118,7 +116,6 @@ import {
   type FleetViewTransform,
   isLinkEdge,
   isRouteEdge,
-  layoutFleetCanvas,
   layoutFleetGraph,
   linkNeedsAttention,
   linkTroubleRank,
@@ -126,7 +123,6 @@ import {
   zoomFleetView,
   nextFleetNode,
 } from "./environmentsMap.logic";
-import { useEnvironmentsCanvasStore } from "./environmentsCanvasStore";
 import {
   AccessMeter,
   accessLevel,
@@ -358,38 +354,19 @@ function useFleetGraph() {
 
 /**
  * The layout for the graph's current shape at the canvas's width; a health or status change
- * reuses the last one. Canvas mode overlays free-form card positions on that auto-layout.
+ * reuses the last one.
  */
 function useFleetLayout(
   graph: FleetGraph,
   stacks: ReadonlyArray<FleetStack>,
   shapeKey: string,
   canvasWidth: number | null,
-  mode: "map" | "canvas",
-  positions: FleetCanvasPositions,
 ) {
   const width = canvasWidth === null ? undefined : fleetLayoutWidth(canvasWidth);
-  const positionsKey =
-    mode === "canvas"
-      ? Object.entries(positions)
-          .map(([id, point]) => `${id}:${point.x},${point.y}`)
-          .toSorted()
-          .join(";")
-      : "";
-  const key = `${shapeKey}\n${width}\n${mode}\n${positionsKey}`;
-  const [laid, setLaid] = useState(() => {
-    const base = layoutFleetGraph(graph, stacks, width);
-    return {
-      key,
-      layout: mode === "canvas" ? layoutFleetCanvas(base, positions) : base,
-    };
-  });
+  const key = `${shapeKey}\n${width}`;
+  const [laid, setLaid] = useState(() => ({ key, layout: layoutFleetGraph(graph, stacks, width) }));
   if (laid.key === key) return laid;
-  const base = layoutFleetGraph(graph, stacks, width);
-  const next = {
-    key,
-    layout: mode === "canvas" ? layoutFleetCanvas(base, positions) : base,
-  };
+  const next = { key, layout: layoutFleetGraph(graph, stacks, width) };
   setLaid(next);
   return next;
 }
@@ -415,20 +392,14 @@ type CodeOnlyDrop = Extract<FleetLinkAction, { kind: "code-only" }>;
 
 /**
  * Every machine this app knows about, how it reaches each one, and which of them are linked.
- * Selecting a machine shows the controls the list has for it. Canvas mode keeps the same
- * machines and wires, but lets the user place cards freely.
+ * Selecting a machine shows the controls the list has for it.
  */
 export function EnvironmentsMap(
   props: Pick<
     FleetDetailsProps,
     "renderSavedEnvironment" | "renderConnectMachine" | "onAddEnvironment"
-  > & {
-    readonly footerId?: string;
-    /** Map auto-lays out; canvas keeps free-form placements. */
-    readonly mode?: "map" | "canvas";
-  },
+  > & { readonly footerId?: string },
 ) {
-  const mode = props.mode ?? "map";
   const { graph, environments, connectProblem } = useFleetGraph();
   const [expanded, setExpanded] = useState(NO_STACKS);
   const stacks = fleetStacks(graph, expanded);
@@ -539,8 +510,6 @@ export function EnvironmentsMap(
   return (
     <>
       <FleetCanvas
-        key={mode}
-        mode={mode}
         graph={graph}
         stacks={stacks}
         shapeKey={key}
@@ -615,12 +584,9 @@ interface FleetSceneProps {
   readonly onTick: (ids: ReadonlyArray<string>, mode: "toggle" | "add") => void;
   readonly onLink: (sourceId: string, targetId: string | null) => void;
   readonly onToggleStack: (stackId: string) => void;
-  /** Canvas mode: drag a card to this top-left. Null keeps cards fixed. */
-  readonly onMoveNode: ((id: string, point: FleetPoint) => void) | null;
 }
 
-interface FleetCanvasProps extends Omit<FleetSceneProps, "layout" | "onMoveNode"> {
-  readonly mode: "map" | "canvas";
+interface FleetCanvasProps extends Omit<FleetSceneProps, "layout"> {
   /** The graph's shape. The canvas lays it out at its own width. */
   readonly shapeKey: string;
   readonly onClearTicked: () => void;
@@ -633,7 +599,6 @@ interface FleetCanvasProps extends Omit<FleetSceneProps, "layout" | "onMoveNode"
 }
 
 function FleetCanvas({
-  mode,
   shapeKey: graphKey,
   onClearTicked,
   onLinkSeveral,
@@ -647,33 +612,10 @@ function FleetCanvas({
   const { graph, stacks, selection, selected, onSelect, onTick } = scene;
   const [canvas, setCanvas] = useState<HTMLDivElement | null>(null);
   const [width, setWidth] = useState<number | null>(null);
-  const positions = useEnvironmentsCanvasStore((state) => state.positions);
-  const moveNode = useEnvironmentsCanvasStore((state) => state.moveNode);
-  const resetPositions = useEnvironmentsCanvasStore((state) => state.resetPositions);
-  const persistedView = useEnvironmentsCanvasStore((state) => state.view);
-  const setPersistedView = useEnvironmentsCanvasStore((state) => state.setView);
-  const { key: layoutKey, layout } = useFleetLayout(
-    graph,
-    stacks,
-    graphKey,
-    width,
-    mode,
-    mode === "canvas" ? positions : {},
-  );
+  const { key: layoutKey, layout } = useFleetLayout(graph, stacks, graphKey, width);
   const [query, setQuery] = useState("");
   // A held view lasts while the map keeps its shape, whatever the width; otherwise it fits itself.
-  // Canvas mode restores the last pan/zoom from local storage on first paint.
-  const [manual, setManual] = useState<FleetHeldView | null>(() =>
-    mode === "canvas" && persistedView !== null
-      ? {
-          key: graphKey,
-          view: persistedView,
-          height: CANVAS_HEIGHT.min,
-          glide: false,
-          undo: null,
-        }
-      : null,
-  );
+  const [manual, setManual] = useState<FleetHeldView | null>(null);
   // What was last drawn, to tell a stack opening or closing from any other change of shape.
   const [drawn, setDrawn] = useState({ graphKey, layoutKey, layout, stacks });
   const [dragging, setDragging] = useState(false);
@@ -732,19 +674,12 @@ function FleetCanvas({
   const size =
     width === null
       ? null
-      : {
-          width,
-          height:
-            mode === "canvas"
-              ? Math.max(CANVAS_HEIGHT.min, Math.min(CANVAS_HEIGHT.max, held?.height ?? 480))
-              : (held?.height ?? fleetCanvasHeight(layout, width, CANVAS_HEIGHT)),
-        };
+      : { width, height: held?.height ?? fleetCanvasHeight(layout, width, CANVAS_HEIGHT) };
   const view = held?.view ?? (size === null ? null : fitFleetLayout(layout, size));
   const glide = manual !== null && (held === null || held.glide);
   const setView = (next: FleetViewTransform, eased: boolean) => {
     if (size === null) return;
     setManual({ key: graphKey, view: next, height: size.height, glide: eased, undo: null });
-    if (mode === "canvas") setPersistedView(next);
   };
   const zoom = (
     factor: number,
@@ -763,10 +698,7 @@ function FleetCanvas({
     );
   };
   // Keeps the entry so the scene eases back to the fit; its stale key marks it as not held.
-  const fit = () => {
-    setManual((current) => (current === null ? null : { ...current, key: "" }));
-    if (mode === "canvas") setPersistedView(null);
-  };
+  const fit = () => setManual((current) => (current === null ? null : { ...current, key: "" }));
   const onWheel = useEffectEvent((event: WheelEvent) => {
     // Plain scrolling stays the page's; a pinch or Ctrl/Cmd + wheel zooms the map.
     if (!event.ctrlKey && !event.metaKey) return;
@@ -1033,13 +965,6 @@ function FleetCanvas({
               </MenuPopup>
             </Menu>
           )}
-          {mode === "canvas" && Object.keys(positions).length > 0 ? (
-            <Button size="xs" variant="ghost-muted" onClick={resetPositions}>
-              {gt("Reset layout", {
-                $context: "clears free-form canvas card positions back to the auto map",
-              })}
-            </Button>
-          ) : null}
           <Popover>
             <PopoverTrigger
               render={
@@ -1051,9 +976,6 @@ function FleetCanvas({
             <PopoverPopup align="end" width="sm" padding="compact">
               <ul className="list-disc space-y-1 pl-4 text-xs text-muted-foreground">
                 <li>{gt("Select a machine to manage it.")}</li>
-                {mode === "canvas" ? (
-                  <li>{gt("Drag a machine to place it. Drag empty space to pan.")}</li>
-                ) : null}
                 {sources.length === 0 ? null : (
                   <>
                     <li>{gt("Drag a plus onto a machine to link them.")}</li>
@@ -1106,13 +1028,7 @@ function FleetCanvas({
               transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
             }}
           >
-            <FleetScene
-              {...scene}
-              layout={layout}
-              matches={matches}
-              onReveal={reveal}
-              onMoveNode={mode === "canvas" ? moveNode : null}
-            />
+            <FleetScene {...scene} layout={layout} matches={matches} onReveal={reveal} />
           </div>
         )}
         {box === null ? null : (
@@ -1429,7 +1345,6 @@ const FleetScene = memo(function FleetScene({
   onLink,
   onToggleStack,
   onReveal,
-  onMoveNode,
 }: FleetSceneProps & {
   /** Machines a search names; the rest step back. Null when nothing is searched for. */
   readonly matches: ReadonlySet<string> | null;
@@ -1444,13 +1359,6 @@ const FleetScene = memo(function FleetScene({
     readonly pointerId: number;
     readonly x: number;
     readonly y: number;
-    moved: boolean;
-  } | null>(null);
-  const nodeDrag = useRef<{
-    readonly pointerId: number;
-    readonly id: string;
-    readonly origin: FleetPoint;
-    readonly start: FleetPoint;
     moved: boolean;
   } | null>(null);
   // A drag ends with a click on the handle it started from; that click must not open the dialog.
@@ -1563,72 +1471,12 @@ const FleetScene = memo(function FleetScene({
     tabIndex: target.id === tabStop ? 0 : -1,
     style: { left: rect.x, top: rect.y, width: rect.width, height: rect.height },
     onClick: (event: MouseEvent<HTMLElement>) => {
-      if (swallowClick.current) {
-        swallowClick.current = false;
-        return;
-      }
       if ((event.shiftKey || event.metaKey || event.ctrlKey) && tickable(target.id)) {
         onTick([target.id], "toggle");
         return;
       }
       onSelect(isSelected(target.kind, target.id) ? null : target);
     },
-    onPointerDown:
-      onMoveNode === null
-        ? undefined
-        : (event: PointerEvent<HTMLElement>) => {
-            if (event.button !== 0 || nodeDrag.current !== null) return;
-            // Link handles and stack expanders keep their own gestures.
-            if (
-              (event.target as Element).closest("[data-fleet-handle],[data-fleet-stack-toggle]")
-            ) {
-              return;
-            }
-            nodeDrag.current = {
-              pointerId: event.pointerId,
-              id: target.id,
-              origin: { x: rect.x, y: rect.y },
-              start: { x: event.clientX, y: event.clientY },
-              moved: false,
-            };
-            event.currentTarget.setPointerCapture(event.pointerId);
-          },
-    onPointerMove:
-      onMoveNode === null
-        ? undefined
-        : (event: PointerEvent<HTMLElement>) => {
-            const current = nodeDrag.current;
-            if (current === null || current.pointerId !== event.pointerId) return;
-            const scene = event.currentTarget.closest("[data-fleet-scene]");
-            const bounds = scene?.getBoundingClientRect();
-            if (!bounds || bounds.width === 0) return;
-            const scale = bounds.width / layout.width;
-            const dx = (event.clientX - current.start.x) / scale;
-            const dy = (event.clientY - current.start.y) / scale;
-            if (!current.moved && Math.hypot(dx, dy) < 4 / scale) return;
-            current.moved = true;
-            onMoveNode(current.id, {
-              x: current.origin.x + dx,
-              y: current.origin.y + dy,
-            });
-          },
-    onPointerUp:
-      onMoveNode === null
-        ? undefined
-        : (event: PointerEvent<HTMLElement>) => {
-            const current = nodeDrag.current;
-            if (current === null || current.pointerId !== event.pointerId) return;
-            nodeDrag.current = null;
-            if (current.moved) swallowClick.current = true;
-          },
-    onLostPointerCapture:
-      onMoveNode === null
-        ? undefined
-        : () => {
-            if (nodeDrag.current === null) return;
-            if (nodeDrag.current.moved) swallowClick.current = true;
-            nodeDrag.current = null;
-          },
     // The keydown ticked the machine; without this the button would also click.
     onKeyUp: (event: KeyboardEvent<HTMLElement>) => {
       if (event.key === " " && tickable(target.id)) event.preventDefault();
@@ -1644,8 +1492,7 @@ const FleetScene = memo(function FleetScene({
   });
   const nodeClass = (id: string) =>
     cn(
-      "absolute flex items-center text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-pressed:ring-2 aria-pressed:ring-primary aria-pressed:ring-inset forced-colors:focus-visible:outline-2 forced-colors:aria-pressed:outline-2",
-      onMoveNode === null ? "cursor-pointer" : "cursor-grab active:cursor-grabbing",
+      "absolute flex cursor-pointer items-center text-left outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset aria-pressed:ring-2 aria-pressed:ring-primary aria-pressed:ring-inset forced-colors:focus-visible:outline-2 forced-colors:aria-pressed:outline-2",
       fade(nodeDimmed(id)),
       linkDrag?.overId === id && "ring-2 ring-primary ring-inset",
     );
@@ -1718,16 +1565,10 @@ const FleetScene = memo(function FleetScene({
   return (
     <div
       role="group"
-      aria-label={onMoveNode === null ? gt("Map of your machines") : gt("Canvas of your machines")}
-      aria-description={
-        onMoveNode === null
-          ? gt(
-              "Arrow keys move between machines. Enter opens a machine's details, with its routes and links. Space selects a machine for linking several at once. Tab from an environment reaches its link button. Plus and minus zoom, zero fits the map.",
-            )
-          : gt(
-              "Drag machines to place them. Drag empty space to pan. Arrow keys move between machines. Enter opens a machine's details. Plus and minus zoom, zero fits the canvas.",
-            )
-      }
+      aria-label={gt("Map of your machines")}
+      aria-description={gt(
+        "Arrow keys move between machines. Enter opens a machine's details, with its routes and links. Space selects a machine for linking several at once. Tab from an environment reaches its link button. Plus and minus zoom, zero fits the map.",
+      )}
       onKeyDown={onKeyDown}
     >
       {layout.columns.map((column) => (
@@ -2090,7 +1931,6 @@ const FleetScene = memo(function FleetScene({
             <button
               type="button"
               data-fleet-item=""
-              data-fleet-stack-toggle=""
               tabIndex={stack.id === tabStop ? 0 : -1}
               aria-label={
                 stack.expanded
@@ -2366,7 +2206,6 @@ const FleetScene = memo(function FleetScene({
               <button
                 type="button"
                 data-fleet-item=""
-                data-fleet-handle=""
                 tabIndex={node.id === tabStop ? 0 : -1}
                 aria-label={gt("Link {label} to another machine", { label: node.label })}
                 style={{ left: handle.x - 9, top: handle.y - 9 }}
