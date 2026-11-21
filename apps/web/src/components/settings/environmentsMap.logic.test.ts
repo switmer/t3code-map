@@ -30,7 +30,9 @@ import {
   fleetTwoWayLinks,
   isLinkEdge,
   isRouteEdge,
+  layoutFleetCanvas,
   layoutFleetGraph,
+  moveFleetCanvasPosition,
   nextFleetNode,
   zoomFleetView,
   type FleetConnectMachineInput,
@@ -1409,5 +1411,41 @@ describe("fitting the view", () => {
   it("zooms around the anchor", () => {
     const view = zoomFleetView({ x: 10, y: 20, scale: 1 }, 2, { x: 100, y: 100 });
     expect(view).toEqual({ scale: 2, x: -80, y: -60 });
+  });
+});
+
+describe("canvas placements", () => {
+  it("keeps auto-layout cards until one is moved, then redraws its wires", () => {
+    const graph = build([environment("a"), environment("b", [link("x")])]);
+    const base = layoutFleetGraph(graph);
+    const untouched = layoutFleetCanvas(base, {});
+    expect(untouched.nodes.get(node("a"))).toEqual(base.nodes.get(node("a")));
+    expect(untouched.columns).toEqual([]);
+
+    const moved = layoutFleetCanvas(base, { [node("b")]: { x: 40, y: 220 } });
+    expect(moved.nodes.get(node("b"))).toEqual({
+      ...base.nodes.get(node("b"))!,
+      x: 40,
+      y: 220,
+    });
+    expect(moved.nodes.get(node("a"))).toEqual(base.nodes.get(node("a")));
+    const route = [...moved.routes.values()][0];
+    expect(route?.d).toContain("M");
+    expect(moved.handles.get(node("b"))).toEqual({
+      x: 40 + base.nodes.get(node("b"))!.width,
+      y: 220 + base.nodes.get(node("b"))!.height / 2,
+    });
+  });
+
+  it("clamps free-form placements to the non-negative quadrant", () => {
+    expect(moveFleetCanvasPosition({}, "env:a", { x: -12, y: 8 })).toEqual({
+      "env:a": { x: 0, y: 8 },
+    });
+    const same = moveFleetCanvasPosition({ "env:a": { x: 10, y: 20 } }, "env:a", {
+      x: 10,
+      y: 20,
+    });
+    expect(same).toEqual({ "env:a": { x: 10, y: 20 } });
+    expect(moveFleetCanvasPosition(same, "env:a", { x: 10, y: 20 })).toBe(same);
   });
 });

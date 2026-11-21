@@ -50,6 +50,7 @@ import { ConnectDeviceApprovalSettings } from "./ConnectDeviceApprovalSettings";
 import { EnvironmentIconMenu } from "./EnvironmentIconPicker";
 import { FoldedSettingsSection } from "./FoldedSettingsSection";
 import { EnvironmentsMap } from "./EnvironmentsMap";
+import { type EnvironmentsLayoutMode, useEnvironmentsCanvasStore } from "./environmentsCanvasStore";
 import { LinkedEnvironmentsSettings } from "./LinkedEnvironmentsSettings";
 import { addEnvironmentPrefillAtom } from "~/state/linkedThreadView";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
@@ -388,8 +389,13 @@ function ConnectionsSettingsContent({
   };
   // The map is the page's main view where there is room; the list is its equivalent everywhere.
   const roomForMap = useMediaQuery("md");
-  const [pickedEnvironmentsView, setPickedEnvironmentsView] = useState<"map" | "list" | null>(null);
-  const environmentsView = roomForMap ? (pickedEnvironmentsView ?? "map") : "list";
+  const preferredEnvironmentsView = useEnvironmentsCanvasStore((state) => state.preferredView);
+  const setPreferredEnvironmentsView = useEnvironmentsCanvasStore(
+    (state) => state.setPreferredView,
+  );
+  const environmentsView: EnvironmentsLayoutMode = roomForMap
+    ? (preferredEnvironmentsView ?? "map")
+    : "list";
   const [removingSavedEnvironmentId, setRemovingSavedEnvironmentId] =
     useState<EnvironmentId | null>(null);
   const [isUpdatingDesktopServerExposure, setIsUpdatingDesktopServerExposure] = useState(false);
@@ -1841,11 +1847,18 @@ function ConnectionsSettingsContent({
               value={[environmentsView]}
               onValueChange={(next) => {
                 const value = next[0];
-                if (value === "map" || value === "list") setPickedEnvironmentsView(value);
+                if (value === "map" || value === "list" || value === "canvas") {
+                  setPreferredEnvironmentsView(value);
+                }
               }}
             >
               <Toggle value="map">
                 {gt("Map", { $context: "view switch: show machines as a diagram" })}
+              </Toggle>
+              <Toggle value="canvas">
+                {gt("Canvas", {
+                  $context: "view switch: show machines on a free-form pannable canvas",
+                })}
               </Toggle>
               <Toggle value="list">
                 {gt("List", { $context: "view switch: show items as a list" })}
@@ -1873,8 +1886,9 @@ function ConnectionsSettingsContent({
           </div>
         }
       >
-        {environmentsView === "map" ? (
+        {environmentsView === "map" || environmentsView === "canvas" ? (
           <EnvironmentsMap
+            mode={environmentsView}
             footerId={searchableSetting("linked-environments").id}
             onAddEnvironment={openAddEnvironment}
             renderSavedEnvironment={(environment) =>
