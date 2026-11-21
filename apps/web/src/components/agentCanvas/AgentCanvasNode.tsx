@@ -8,7 +8,15 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 import { useGT } from "gt-react";
-import { CrownIcon, MoreHorizontalIcon, SendIcon, UsersIcon, WaypointsIcon } from "lucide-react";
+import {
+  AlertTriangleIcon,
+  CrownIcon,
+  CopyPlusIcon,
+  MoreHorizontalIcon,
+  SendIcon,
+  UsersIcon,
+  WaypointsIcon,
+} from "lucide-react";
 import { memo, useEffect, useState } from "react";
 
 import { useAgentCanvasStore, type AgentCanvasRole } from "../../agentCanvasStore";
@@ -19,15 +27,19 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { AgentCanvasLod } from "./agentCanvas.logic";
 import {
   agentCanvasPreviewKind,
+  agentCanvasRunningStartedAt,
+  agentCanvasStatusTone,
   LEAD_SOURCE_HANDLES,
   leadHandleTopPercent,
   readShotDemo,
+  threadNeedsAttention,
   workerKeysForLead,
 } from "./agentCanvas.logic";
 import { AgentCanvasSession } from "./AgentCanvasSession";
@@ -40,23 +52,13 @@ export type AgentCanvasAgentFlowNode = Node<
     readonly lod: AgentCanvasLod;
     readonly focused: boolean;
     readonly workerCount: number;
+    readonly needsAttention: boolean;
     readonly onFocus: () => void;
     readonly onSendToWorkers: (message: string) => Promise<void>;
+    readonly onDuplicateWithModel: () => void;
   },
   "agent"
 >;
-
-type StatusTone = "running" | "attention" | "failed" | "idle" | "ready";
-
-function threadStatusTone(thread: EnvironmentThreadShell): StatusTone {
-  if (thread.hasPendingApprovals || thread.hasPendingUserInput) return "attention";
-  if (thread.runtime?.status === "running" || thread.latestRun?.status === "running") {
-    return "running";
-  }
-  if (thread.latestRun?.status === "failed") return "failed";
-  if (thread.latestRun?.status === "completed") return "idle";
-  return "ready";
-}
 
 function threadStatusLabel(thread: EnvironmentThreadShell, gt: ReturnType<typeof useGT>): string {
   if (thread.hasPendingApprovals) return gt("Needs approval");
@@ -69,12 +71,16 @@ function threadStatusLabel(thread: EnvironmentThreadShell, gt: ReturnType<typeof
   return gt("Ready");
 }
 
-function StatusDot(props: { readonly tone: StatusTone }) {
+function StatusDot(props: {
+  readonly tone: ReturnType<typeof agentCanvasStatusTone>;
+  readonly large?: boolean;
+}) {
   return (
     <span
       aria-hidden
       className={cn(
-        "relative size-1.5 shrink-0 rounded-full",
+        "relative shrink-0 rounded-full",
+        props.large ? "size-2.5" : "size-1.5",
         props.tone === "running" && "agent-canvas-status-pulse bg-success text-success",
         props.tone === "attention" && "bg-warning text-warning",
         props.tone === "failed" && "bg-destructive text-destructive",
@@ -139,6 +145,12 @@ function previewLines(input: {
   return [input.thread.title];
 }
 
+function RunningElapsed(props: { readonly startedAt: string }) {
+  const relative = useRelativeTimeState(props.startedAt);
+  if (relative.status !== "relative") return null;
+  return <span className="tabular-nums">{relative.label}</span>;
+}
+
 export const AgentCanvasNode = memo(function AgentCanvasNode({
   id,
   data,
@@ -169,9 +181,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
   const thread = data.thread;
   const threadKey = data.threadKey;
   const shot = readShotDemo(threadKey);
-  // Live threads stay interactive; shot-demo only paints preview/chip chrome when LOD asks for it.
   const lod = data.lod;
-  const tone = shot?.tone ?? threadStatusTone(thread);
+  const tone = shot?.tone ?? agentCanvasStatusTone(thread);
   const status = shot?.statusLabel ?? threadStatusLabel(thread, gt);
   const title = shot?.title ?? thread.title;
   const isLeadLike = data.role === "lead" || data.role === "coordinator";
@@ -184,6 +195,31 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
     (thread.visibleItemCount > 0
       ? gt("{count, plural, one {# step} other {# steps}}", { count: thread.visibleItemCount })
       : null);
+  const runningStartedAt = agentCanvasRunningStartedAt({
+    runtime: thread.runtime
+      ? {
+          activityStartedAt: thread.runtime.activityStartedAt,
+          status: thread.runtime.status,
+        }
+      : null,
+    latestRun: thread.latestRun
+      ? { startedAt: thread.latestRun.startedAt, status: thread.latestRun.status }
+      : null,
+  });
+  const showAttentionBadge =
+    data.needsAttention ||
+    threadNeedsAttention(thread) ||
+    shot?.tone === "attention" ||
+    shot?.tone === "failed";
+
+  const toneBorder =
+    tone === "attention"
+      ? "border-warning/70"
+      : tone === "failed"
+        ? "border-destructive/70"
+        : tone === "running"
+          ? "border-success/55"
+          : null;
 
   if (lod === "chip") {
     return (
@@ -191,16 +227,26 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         type="button"
         data-agent-canvas-node={threadKey}
         data-agent-canvas-lod={lod}
+        data-agent-canvas-status={tone}
         aria-label={`${title} · ${status}`}
         onClick={data.onFocus}
         className={cn(
           "flex h-full w-full items-center gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-left",
           "outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-          highlighted ? "border-primary shadow-composer" : "border-border/80",
+          highlighted ? "border-primary shadow-composer" : (toneBorder ?? "border-border/80"),
+          tone === "failed" && "ring-1 ring-destructive/35",
+          tone === "attention" && "ring-1 ring-warning/40",
         )}
       >
-        <StatusDot tone={tone} />
+        <StatusDot tone={tone} large />
         <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-tight">{title}</span>
+        <span className="shrink-0 text-3xs font-medium text-muted-foreground">{status}</span>
+        {runningStartedAt ? <RunningElapsed startedAt={runningStartedAt} /> : null}
+        {showAttentionBadge ? (
+          <span className="inline-flex size-4 items-center justify-center rounded-full bg-warning/20 text-warning">
+            <AlertTriangleIcon className="size-2.5" aria-hidden />
+          </span>
+        ) : null}
         <RolePill role={data.role} />
       </button>
     );
@@ -210,15 +256,18 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
     <div
       data-agent-canvas-node={threadKey}
       data-agent-canvas-lod={lod}
+      data-agent-canvas-status={tone}
       className={cn(
         "group relative flex w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
         lod === "interactive" ? "h-full" : "h-auto",
         "outline-none transition-[border-color,box-shadow] duration-150",
         highlighted
           ? "border-primary/70 shadow-composer"
-          : "border-border/65 hover:border-border hover:shadow-composer",
+          : (toneBorder ?? "border-border/65 hover:border-border hover:shadow-composer"),
         isLeadLike && "ring-1 ring-primary/22",
         isLeadLike && highlighted && "ring-primary/40",
+        tone === "failed" && "ring-1 ring-destructive/30",
+        tone === "attention" && "ring-1 ring-warning/35",
       )}
       onPointerDownCapture={() => {
         if (!data.focused) data.onFocus();
@@ -236,7 +285,6 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
 
       <Handle type="target" position={Position.Left} id="in" className="!-left-1 !top-1/2" />
       <Handle type="target" position={Position.Top} id="in-top" className="!-top-1" />
-      {/* Fan outlets evenly spaced so lead edges leave from distinct Y positions. */}
       {LEAD_SOURCE_HANDLES.map((handleId, index) => (
         <Handle
           key={handleId}
@@ -269,6 +317,28 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           </TooltipTrigger>
           <TooltipPopup>{title}</TooltipPopup>
         </Tooltip>
+        {showAttentionBadge ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    "inline-flex h-4 shrink-0 items-center gap-0.5 rounded px-1 text-3xs font-medium",
+                    tone === "failed"
+                      ? "bg-destructive/15 text-destructive"
+                      : tone === "idle"
+                        ? "bg-muted text-muted-foreground"
+                        : "bg-warning/15 text-warning",
+                  )}
+                />
+              }
+            >
+              <AlertTriangleIcon className="size-2.5" aria-hidden />
+              {tone === "failed" ? gt("Failed") : tone === "idle" ? gt("Done") : gt("Needs you")}
+            </TooltipTrigger>
+            <TooltipPopup>{status}</TooltipPopup>
+          </Tooltip>
+        ) : null}
         <span className="max-w-24 shrink-0 truncate font-mono text-3xs leading-none text-muted-foreground">
           {modelLabel}
         </span>
@@ -286,8 +356,13 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           >
             <MoreHorizontalIcon className="size-3.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-40">
+          <DropdownMenuContent align="end" className="min-w-44">
             <DropdownMenuItem onClick={data.onFocus}>{gt("Open live session")}</DropdownMenuItem>
+            <DropdownMenuItem onClick={data.onDuplicateWithModel}>
+              <CopyPlusIcon className="size-3.5" />
+              {gt("Duplicate with another model")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
             {(
               [
                 ["none", gt("No role")],
@@ -372,6 +447,22 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
             className="flex w-full flex-col gap-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             onClick={data.onFocus}
           >
+            <div
+              className={cn(
+                "flex items-center gap-2 border-b border-border/40 px-3 py-1 text-2xs",
+                tone === "attention" && "bg-warning/10 text-warning",
+                tone === "failed" && "bg-destructive/10 text-destructive",
+                tone === "running" && "bg-success/10 text-success",
+                (tone === "idle" || tone === "ready") && "bg-muted/30 text-muted-foreground",
+              )}
+            >
+              <StatusDot tone={tone} />
+              <span className="font-medium">{status}</span>
+              {runningStartedAt ? <RunningElapsed startedAt={runningStartedAt} /> : null}
+              {relativeLabel && !runningStartedAt ? (
+                <span className="ml-auto truncate text-muted-foreground">{relativeLabel}</span>
+              ) : null}
+            </div>
             <div className="overflow-hidden bg-muted/25 px-3 py-1.5">
               <div className="font-mono text-2xs leading-snug text-muted-foreground">
                 {lines.slice(0, 4).map((line) => (
@@ -384,8 +475,6 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
             </div>
             <div className="flex min-h-7 shrink-0 items-center gap-2 border-t border-border/50 px-3 pt-1 pb-1.5 text-2xs text-muted-foreground">
               <RolePill role={data.role} />
-              <span className="truncate">{status}</span>
-              {relativeLabel ? <span className="truncate">{relativeLabel}</span> : null}
               {stepsLabel ? (
                 <span className="ml-auto truncate tabular-nums">{stepsLabel}</span>
               ) : null}
@@ -397,7 +486,6 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
                 </span>
               ) : null}
             </div>
-            {/* Lightweight composer affordance at preview LOD — real ChatView at interactive zoom. */}
             <div
               className="flex shrink-0 items-center gap-1.5 border-t border-border/60 bg-background/80 px-2.5 py-1.5"
               aria-hidden

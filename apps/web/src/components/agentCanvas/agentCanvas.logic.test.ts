@@ -20,6 +20,10 @@ import {
   parseNoteFlowId,
   resolveAgentNodeLayout,
   resolveEdgeKind,
+  resolveNonOverlappingAgentLayouts,
+  rectsOverlap,
+  isInCanvasScene,
+  threadNeedsAttention,
   workerKeysForLead,
 } from "./agentCanvas.logic";
 
@@ -68,6 +72,69 @@ describe("agent canvas layout", () => {
     expect(b.y).toBe(a.y);
     expect(c.x).toBe(a.x);
     expect(c.y).toBeGreaterThan(a.y + a.height);
+  });
+
+  it("flags approval, input, finished, and failed threads for attention", () => {
+    expect(
+      threadNeedsAttention({
+        hasPendingApprovals: true,
+        hasPendingUserInput: false,
+        latestRun: null,
+      }),
+    ).toBe(true);
+    expect(
+      threadNeedsAttention({
+        hasPendingApprovals: false,
+        hasPendingUserInput: true,
+        latestRun: null,
+      }),
+    ).toBe(true);
+    expect(
+      threadNeedsAttention({
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        latestRun: { status: "completed" },
+      }),
+    ).toBe(true);
+    expect(
+      threadNeedsAttention({
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        latestRun: { status: "failed" },
+      }),
+    ).toBe(true);
+    expect(
+      threadNeedsAttention({
+        hasPendingApprovals: false,
+        hasPendingUserInput: false,
+        latestRun: { status: "running" },
+      }),
+    ).toBe(false);
+  });
+
+  it("places overlapping unknown agents into free slots", () => {
+    const lead = { x: 32, y: 120, width: 380, height: 320, role: "lead" as const };
+    const orphan = { x: 40, y: 130, width: 380, height: 320, role: "none" as const };
+    const next = resolveNonOverlappingAgentLayouts({
+      threadKeys: ["lead", "orphan", "w1"],
+      saved: {
+        lead,
+        orphan,
+        w1: { x: 500, y: 120, width: 360, height: 300, role: "worker" },
+      },
+      notes: [{ x: 32, y: 16, width: 196, height: 88 }],
+    });
+    expect(rectsOverlap(next.lead!, next.orphan!)).toBe(false);
+    expect(rectsOverlap(next.lead!, next.w1!)).toBe(false);
+    expect(rectsOverlap(next.orphan!, { x: 32, y: 16, width: 196, height: 88 })).toBe(false);
+  });
+
+  it("parks threads with no saved layout off-scene", () => {
+    const next = resolveNonOverlappingAgentLayouts({
+      threadKeys: ["fresh"],
+      saved: {},
+    });
+    expect(isInCanvasScene(next.fresh!)).toBe(false);
   });
 
   it("fits the scene clear of toolbar and minimap chrome", () => {

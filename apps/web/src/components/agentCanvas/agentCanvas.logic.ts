@@ -349,6 +349,164 @@ export function isInCanvasScene(position: { readonly x: number; readonly y: numb
   );
 }
 
+type Rect = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+};
+
+/** True when two axis-aligned rects overlap (with optional gutter). */
+export function rectsOverlap(a: Rect, b: Rect, gap = 16): boolean {
+  return !(
+    a.x + a.width + gap <= b.x ||
+    b.x + b.width + gap <= a.x ||
+    a.y + a.height + gap <= b.y ||
+    b.y + b.height + gap <= a.y
+  );
+}
+
+/** First free slot in a spreading grid that does not collide with occupied rects. */
+export function findFreeAgentSlot(
+  occupied: ReadonlyArray<Rect>,
+  size: Pick<Rect, "width" | "height"> = DEFAULT_AGENT_NODE_SIZE,
+): Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height"> {
+  for (let index = 0; index < 64; index += 1) {
+    const candidate = {
+      ...defaultAgentNodeLayout(index),
+      width: size.width,
+      height: size.height,
+    };
+    if (!occupied.some((rect) => rectsOverlap(candidate, rect))) {
+      return {
+        x: candidate.x,
+        y: candidate.y,
+        width: candidate.width,
+        height: candidate.height,
+      };
+    }
+  }
+  // Fall back far to the right of everything rather than stacking.
+  let maxX = 0;
+  for (const rect of occupied) maxX = Math.max(maxX, rect.x + rect.width);
+  return {
+    x: maxX + NODE_GAP_X,
+    y: 80,
+    width: size.width,
+    height: size.height,
+  };
+}
+
+/**
+ * Ensure every in-scene agent has a non-overlapping layout. Leads/workers keep
+ * preferred positions when free; unknown/new nodes claim the next free slot.
+ * Off-scene (parked) layouts are left alone.
+ */
+export function resolveNonOverlappingAgentLayouts(input: {
+  readonly threadKeys: ReadonlyArray<string>;
+  readonly saved: Readonly<Record<string, AgentCanvasNodeLayout>>;
+  readonly notes?: ReadonlyArray<Rect>;
+}): Record<string, AgentCanvasNodeLayout> {
+  const next: Record<string, AgentCanvasNodeLayout> = {};
+  const occupied: Rect[] = [...(input.notes ?? [])];
+
+  // Preserve lead-like nodes first so workers can stay beside them.
+  const ordered = [...input.threadKeys].sort((a, b) => {
+    const roleRank = (key: string) => {
+      const role = input.saved[key]?.role ?? "none";
+      if (role === "lead" || role === "coordinator") return 0;
+      if (role === "worker") return 1;
+      return 2;
+    };
+    return roleRank(a) - roleRank(b);
+  });
+
+  for (const [index, key] of ordered.entries()) {
+    const saved = input.saved[key];
+    if (saved === undefined) {
+      // Never placed on this canvas: park off-scene so project history does not flood
+      // the board. Spawn / new-thread / duplicate call setAgentLayout into a free slot.
+      next[key] = {
+        x: AGENT_CANVAS_SCENE_BOUND + 400 + (index % 8) * 400,
+        y: AGENT_CANVAS_SCENE_BOUND + 400 + Math.floor(index / 8) * 360,
+        width: DEFAULT_AGENT_NODE_SIZE.width,
+        height: DEFAULT_AGENT_NODE_SIZE.height,
+        role: "none",
+      };
+      continue;
+    }
+    const base = resolveAgentNodeLayout(index, saved);
+    if (!isInCanvasScene(base)) {
+      next[key] = base;
+      continue;
+    }
+    const collides = occupied.some((rect) => rectsOverlap(base, rect));
+    const placed = collides
+      ? {
+          ...base,
+          ...findFreeAgentSlot(occupied, { width: base.width, height: base.height }),
+        }
+      : base;
+    next[key] = placed;
+    occupied.push(placed);
+  }
+  return next;
+}
+
+/** Card needs the user (approval, input, finished turn, or failure). */
+export function threadNeedsAttention(thread: {
+  readonly hasPendingApprovals: boolean;
+  readonly hasPendingUserInput: boolean;
+  readonly latestRun?: { readonly status: string } | null;
+}): boolean {
+  if (thread.hasPendingApprovals || thread.hasPendingUserInput) return true;
+  const status = thread.latestRun?.status;
+  return status === "failed" || status === "completed";
+}
+
+export type AgentCanvasStatusTone = "running" | "attention" | "failed" | "idle" | "ready";
+
+export function agentCanvasStatusTone(thread: {
+  readonly hasPendingApprovals: boolean;
+  readonly hasPendingUserInput: boolean;
+  readonly runtime?: { readonly status: string } | null;
+  readonly latestRun?: { readonly status: string } | null;
+}): AgentCanvasStatusTone {
+  if (thread.hasPendingApprovals || thread.hasPendingUserInput) return "attention";
+  if (thread.runtime?.status === "running" || thread.latestRun?.status === "running") {
+    return "running";
+  }
+  if (thread.latestRun?.status === "failed") return "failed";
+  if (thread.latestRun?.status === "completed") return "idle";
+  return "ready";
+}
+
+/** Running elapsed start — only when the shell actually has a start timestamp. */
+export function agentCanvasRunningStartedAt(thread: {
+  readonly runtime?:
+    | {
+        readonly activityStartedAt?: string | null | undefined;
+        readonly status?: string | null | undefined;
+      }
+    | null
+    | undefined;
+  readonly latestRun?:
+    | {
+        readonly startedAt?: string | null | undefined;
+        readonly status?: string | null | undefined;
+      }
+    | null
+    | undefined;
+}): string | null {
+  if (thread.runtime?.status === "running" && thread.runtime.activityStartedAt) {
+    return thread.runtime.activityStartedAt;
+  }
+  if (thread.latestRun?.status === "running" && thread.latestRun.startedAt) {
+    return thread.latestRun.startedAt;
+  }
+  return null;
+}
+
 export type AgentCanvasPreviewKind = "goal" | "completed" | "running" | "titled" | "empty";
 
 /** Chooses which preview copy a canvas card should show. */

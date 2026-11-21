@@ -1,4 +1,8 @@
-import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
+import {
+  scopedThreadKey,
+  scopeProjectRef,
+  scopeThreadRef,
+} from "@t3tools/client-runtime/environment";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import {
   Background,
@@ -13,6 +17,7 @@ import {
   useReactFlow,
   type Connection,
   type Edge,
+  type FinalConnectionState,
   type Node,
   type OnEdgesChange,
   type OnNodesChange,
@@ -21,13 +26,17 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useGT } from "gt-react";
 import {
+  AlertTriangleIcon,
   HandIcon,
   KeyboardIcon,
+  MoreHorizontalIcon,
   MousePointer2Icon,
   Redo2Icon,
   SquarePenIcon,
   StickyNoteIcon,
   Undo2Icon,
+  Volume2Icon,
+  VolumeXIcon,
   WaypointsIcon,
   XIcon,
 } from "lucide-react";
@@ -50,10 +59,27 @@ import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
 import { buildThreadRouteParams } from "../../threadRoutes";
 import { Button } from "../ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "../ui/menu";
 import { SidebarInset } from "../ui/sidebar";
 import { toastManager } from "../ui/toast";
 import { stackedThreadToast } from "../ui/toastHelpers";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import {
+  attentionQueue,
+  playAttentionChime,
+  readAttentionSoundEnabled,
+  readViewedAttentionKeys,
+  writeAttentionSoundEnabled,
+  writeViewedAttentionKeys,
+} from "./agentCanvasAttention";
 import {
   AGENT_CANVAS_INTERACTIVE_ZOOM,
   agentCanvasLod,
@@ -62,6 +88,7 @@ import {
   createNoteId,
   defaultNotePlacement,
   defaultWorkerLayoutForLead,
+  findFreeAgentSlot,
   isInCanvasScene,
   isNodeOnScreen,
   isSceneClearOfChrome,
@@ -71,8 +98,10 @@ import {
   parseAgentFlowId,
   parseNoteFlowId,
   resolveAgentNodeLayout,
+  resolveNonOverlappingAgentLayouts,
   readShotDemo,
   resolveEdgeKind,
+  threadNeedsAttention,
   workerKeysForLead,
 } from "./agentCanvas.logic";
 import { AgentCanvasLeadEdge } from "./AgentCanvasLeadEdge";
@@ -178,6 +207,11 @@ function AgentCanvasFlow() {
   const pushHistory = useAgentCanvasStore((state) => state.pushHistory);
   const undo = useAgentCanvasStore((state) => state.undo);
   const redo = useAgentCanvasStore((state) => state.redo);
+  const [attentionSound, setAttentionSound] = useState(readAttentionSoundEnabled);
+  const [viewedAttention, setViewedAttention] = useState(readViewedAttentionKeys);
+  const [showLegend, setShowLegend] = useState(false);
+  const prevAttentionRef = useRef<string[]>([]);
+  const connectingFromRef = useRef<string | null>(null);
   const { handleNewThread, defaultProjectRef } = useHandleNewThread();
   const startThreadTurn = useOrchestrationCommand(threadEnvironment.startTurn, {
     reportFailure: false,
@@ -218,6 +252,47 @@ function AgentCanvasFlow() {
     void setViewport({ x: view.x, y: view.y, zoom: view.zoom }, { duration: 0 });
   }, [setViewport, storeHydrated, view.x, view.y, view.zoom]);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- place new/overlapping agents once; read store inside so drags don't re-fire
+  useEffect(() => {
+    if (!storeHydrated || threads.length === 0) return;
+    const threadKeys = threads.map((thread) =>
+      scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
+    );
+    const saved = useAgentCanvasStore.getState().agents;
+    const noteRects = Object.values(useAgentCanvasStore.getState().notes).map((note) => ({
+      x: note.x,
+      y: note.y,
+      width: note.width,
+      height: note.height,
+    }));
+    const resolved = resolveNonOverlappingAgentLayouts({
+      threadKeys,
+      saved,
+      notes: noteRects,
+    });
+    let changed = false;
+    for (const key of threadKeys) {
+      const next = resolved[key];
+      const prev = saved[key];
+      if (next === undefined) continue;
+      if (
+        prev &&
+        prev.x === next.x &&
+        prev.y === next.y &&
+        prev.width === next.width &&
+        prev.height === next.height &&
+        prev.role === next.role
+      ) {
+        continue;
+      }
+      changed = true;
+      setAgentLayout(key, next);
+    }
+    if (changed) framedScene.current = false;
+    // Thread id fingerprint only — dragging must not re-layout.
+    // oxlint-disable-next-line react/exhaustive-effect-dependencies -- id fingerprint, not agents/layouts
+  }, [setAgentLayout, storeHydrated, threads.map((thread) => thread.id).join("|")]);
+
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- frame once after persist so cards clear toolbar/minimap chrome
   useEffect(() => {
     if (!storeHydrated || framedScene.current || viewportSize === null || threads.length === 0) {
@@ -254,7 +329,78 @@ function AgentCanvasFlow() {
     });
   }, [agents, setView, setViewport, storeHydrated, threads, view, viewportSize]);
 
-  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- canvas keyboard shortcuts (? / Esc)
+  const threadKeyOf = (thread: (typeof threads)[number]) =>
+    scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+
+  const sceneThreads = threads.filter((thread) => {
+    const key = threadKeyOf(thread);
+    const layout = agents[key] ?? resolveAgentNodeLayout(0, undefined);
+    return isInCanvasScene(layout);
+  });
+  const attentionKeys = (() => {
+    // Only on-canvas agents — never the whole project's parked history.
+    const base = attentionQueue(sceneThreads, threadKeyOf, viewedAttention);
+    const extras: string[] = [];
+    for (const thread of sceneThreads) {
+      const key = threadKeyOf(thread);
+      if (viewedAttention.has(key) || base.includes(key)) continue;
+      const tone = readShotDemo(key)?.tone;
+      if (tone === "attention" || tone === "failed") extras.push(key);
+    }
+    return [...base, ...extras];
+  })();
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- optional attention chime when the queue grows
+  useEffect(() => {
+    const prev = prevAttentionRef.current;
+    prevAttentionRef.current = attentionKeys;
+    if (!attentionSound) return;
+    if (attentionKeys.some((key) => !prev.includes(key))) playAttentionChime();
+  }, [attentionKeys, attentionSound]);
+
+  const markAttentionViewed = (threadKey: string) => {
+    setViewedAttention((current) => {
+      if (current.has(threadKey)) return current;
+      const next = new Set(current);
+      next.add(threadKey);
+      writeViewedAttentionKeys(next);
+      return next;
+    });
+  };
+
+  const focusAttention = (threadKey: string) => {
+    const thread = threads.find((candidate) => threadKeyOf(candidate) === threadKey);
+    if (thread === undefined) return;
+    markAttentionViewed(threadKey);
+    const layout = agents[threadKey] ?? resolveAgentNodeLayout(0, undefined);
+    if (viewportSize) {
+      const cleared = computeFitViewport([layout], viewportSize, {
+        minZoom: AGENT_CANVAS_INTERACTIVE_ZOOM,
+        maxZoom: 1.1,
+      });
+      void setViewport(cleared, { duration: 220 }).then(() => setView(cleared));
+    }
+    void navigate({
+      to: "/$environmentId/$threadId",
+      params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+    });
+    window.setTimeout(() => {
+      document
+        .querySelector<HTMLElement>(
+          `[data-agent-canvas-session="${threadKey}"] [data-testid="composer-editor"]`,
+        )
+        ?.focus();
+    }, 280);
+  };
+
+  const focusNextAttention = () => {
+    if (attentionKeys.length === 0) return;
+    const currentIndex = focusedKey ? attentionKeys.indexOf(focusedKey) : -1;
+    const nextKey = attentionKeys[(currentIndex + 1) % attentionKeys.length];
+    if (nextKey) focusAttention(nextKey);
+  };
+
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- canvas keyboard shortcuts (? / Esc / .)
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target;
@@ -269,6 +415,11 @@ function AgentCanvasFlow() {
         setShowShortcuts((open) => !open);
         return;
       }
+      if (event.key === "." && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        focusNextAttention();
+        return;
+      }
       if (event.key === "v" || event.key === "V") {
         setTool("select");
         return;
@@ -279,6 +430,7 @@ function AgentCanvasFlow() {
       }
       if (event.key === "Escape") {
         setShowShortcuts(false);
+        setShowLegend(false);
         // Esc from inside a thread node returns focus to the canvas (not exit canvas mode).
         if (
           target instanceof HTMLElement &&
@@ -295,9 +447,12 @@ function AgentCanvasFlow() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  });
 
   const focusThread = (environmentId: EnvironmentId, threadId: ThreadId) => {
+    const key = scopedThreadKey(scopeThreadRef(environmentId, threadId));
+    const shell = threads.find((candidate) => threadKeyOf(candidate) === key);
+    if (shell && threadNeedsAttention(shell)) markAttentionViewed(key);
     void navigate({
       to: "/$environmentId/$threadId",
       params: buildThreadRouteParams(scopeThreadRef(environmentId, threadId)),
@@ -373,8 +528,12 @@ function AgentCanvasFlow() {
           lod,
           focused,
           workerCount,
+          needsAttention: attentionKeys.includes(threadKey),
           onFocus: () => focusThread(thread.environmentId, thread.id),
           onSendToWorkers: (message: string) => sendToWorkers(threadKey, message),
+          onDuplicateWithModel: () => {
+            void duplicateWithModel(threadKey);
+          },
         },
       } satisfies AgentCanvasAgentFlowNode;
     }),
@@ -624,6 +783,149 @@ function AgentCanvasFlow() {
     await handleNewThread(defaultProjectRef);
   };
 
+  const spawnWorkerFromLead = async (
+    leadKey: string,
+    dropPosition: { readonly x: number; readonly y: number },
+  ) => {
+    const lead = threads.find((thread) => threadKeyOf(thread) === leadKey);
+    if (lead === undefined) return;
+    const projectRef = scopeProjectRef(lead.environmentId, lead.projectId);
+    const prompt = [
+      `Continue from lead “${lead.title}”.`,
+      lead.goal?.objective?.trim() || null,
+      "Own a focused slice and report back when ready.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const created = await handleNewThread(projectRef, {
+      prompt,
+      ...(lead.branch !== null ? { branch: lead.branch } : {}),
+      ...(lead.worktreePath !== null ? { worktreePath: lead.worktreePath } : {}),
+    });
+    if (created === null) return;
+    const workerKey = scopedThreadKey(scopeThreadRef(lead.environmentId, created.threadId));
+    const leadLayout = agents[leadKey] ?? resolveAgentNodeLayout(0, undefined);
+    const occupied = [
+      ...Object.values(useAgentCanvasStore.getState().agents),
+      ...Object.values(useAgentCanvasStore.getState().notes),
+    ];
+    const preferred = {
+      x: dropPosition.x - 180,
+      y: dropPosition.y - 150,
+      width: 360,
+      height: 300,
+    };
+    const slot = occupied.some(
+      (rect) =>
+        !(
+          preferred.x + preferred.width + 16 <= rect.x ||
+          rect.x + rect.width + 16 <= preferred.x ||
+          preferred.y + preferred.height + 16 <= rect.y ||
+          rect.y + rect.height + 16 <= preferred.y
+        ),
+    )
+      ? findFreeAgentSlot(occupied, { width: 360, height: 300 })
+      : preferred;
+    pushHistory();
+    setAgentLayout(workerKey, { ...slot, role: "worker" });
+    if ((agents[leadKey]?.role ?? "none") === "none") setAgentRole(leadKey, "lead");
+    const workers = workerKeysForLead(leadKey, [
+      ...edges,
+      {
+        id: "pending",
+        source: agentFlowId(leadKey),
+        target: agentFlowId(workerKey),
+        kind: "lead",
+      },
+    ]);
+    addStoreEdge({
+      id: newCanvasEdgeId(agentFlowId(leadKey), agentFlowId(workerKey)),
+      source: agentFlowId(leadKey),
+      target: agentFlowId(workerKey),
+      kind: "lead",
+      sourceHandle: leadSourceHandleForIndex(workers.length - 1, workers.length),
+      targetHandle: "in",
+    });
+    // Keep existing workers tidy beside the lead after spawn.
+    for (const [workerIndex, key] of workers.entries()) {
+      const placed = defaultWorkerLayoutForLead(leadLayout, workerIndex, workers.length);
+      if (key === workerKey) {
+        setAgentLayout(key, { ...slot, role: "worker" });
+      } else {
+        setAgentLayout(key, {
+          ...(agents[key] ?? { ...placed, role: "worker" as const }),
+          ...placed,
+          role: "worker",
+        });
+      }
+    }
+    focusThread(lead.environmentId, created.threadId);
+    toastManager.add(
+      stackedThreadToast({
+        type: "success",
+        title: gt("Spawned worker from lead"),
+      }),
+    );
+  };
+
+  const duplicateWithModel = async (sourceKey: string) => {
+    const source = threads.find((thread) => threadKeyOf(thread) === sourceKey);
+    if (source === undefined) return;
+    const projectRef = scopeProjectRef(source.environmentId, source.projectId);
+    // Demo-safe: always Replay/showcase — never call a paid provider from canvas duplicate.
+    const prompt =
+      source.goal?.objective?.trim() ||
+      `Same task as “${source.title}”: re-run with another model.`;
+    const created = await handleNewThread(projectRef, {
+      prompt,
+      ...(source.branch !== null ? { branch: source.branch } : {}),
+      ...(source.worktreePath !== null ? { worktreePath: source.worktreePath } : {}),
+    });
+    if (created === null) return;
+    const siblingKey = scopedThreadKey(scopeThreadRef(source.environmentId, created.threadId));
+    const sourceLayout = agents[sourceKey] ?? resolveAgentNodeLayout(0, undefined);
+    const side = {
+      x: sourceLayout.x + sourceLayout.width + 40,
+      y: sourceLayout.y,
+      width: sourceLayout.width,
+      height: sourceLayout.height,
+      role: "none" as const,
+    };
+    pushHistory();
+    setAgentLayout(siblingKey, side);
+    focusThread(source.environmentId, created.threadId);
+    toastManager.add(
+      stackedThreadToast({
+        type: "success",
+        title: gt("Duplicated beside the original (Replay demo model)"),
+      }),
+    );
+  };
+
+  const onConnectStart = (_event: unknown, params: { nodeId: string | null }) => {
+    connectingFromRef.current = params.nodeId;
+  };
+
+  const onConnectEnd = (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+    const fromId = connectingFromRef.current;
+    connectingFromRef.current = null;
+    if (connectionState.isValid) return;
+    if (fromId === null) return;
+    const leadKey = parseAgentFlowId(fromId);
+    if (leadKey === null) return;
+    const leadRole = agents[leadKey]?.role ?? "none";
+    if (leadRole !== "lead" && leadRole !== "coordinator") return;
+    const point =
+      "clientX" in event
+        ? { x: event.clientX, y: event.clientY }
+        : event.changedTouches[0]
+          ? { x: event.changedTouches[0].clientX, y: event.changedTouches[0].clientY }
+          : null;
+    if (point === null) return;
+    const flow = screenToFlowPosition(point);
+    void spawnWorkerFromLead(leadKey, flow);
+  };
+
   const addNote = () => {
     pushHistory();
     const id = createNoteId();
@@ -654,7 +956,82 @@ function AgentCanvasFlow() {
         <span className="text-2xs text-muted-foreground">
           {gt("{count, plural, one {# agent} other {# agents}}", { count: sceneAgentCount })}
         </span>
-        <div className="ml-auto">
+        {attentionKeys.length > 0 ? (
+          <Button
+            size="xs"
+            variant="secondary"
+            data-agent-canvas-attention-count
+            onClick={focusNextAttention}
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <AlertTriangleIcon className="size-3.5 text-warning" />
+              {gt("{count, plural, one {# needs you} other {# need you}}", {
+                count: attentionKeys.length,
+              })}
+            </span>
+          </Button>
+        ) : null}
+        <div className="ml-auto flex items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button size="icon-xs" variant="ghost-muted" aria-label={gt("Canvas options")} />
+              }
+            >
+              <MoreHorizontalIcon className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-52">
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{gt("Attention")}</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onClick={() => {
+                    const next = !attentionSound;
+                    setAttentionSound(next);
+                    writeAttentionSoundEnabled(next);
+                  }}
+                >
+                  {attentionSound ? (
+                    <Volume2Icon className="size-3.5" />
+                  ) : (
+                    <VolumeXIcon className="size-3.5" />
+                  )}
+                  {attentionSound ? gt("Attention sound on") : gt("Attention sound off")}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={focusNextAttention}
+                  disabled={attentionKeys.length === 0}
+                >
+                  <AlertTriangleIcon className="size-3.5" />
+                  {gt("Next needing attention (.)")}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <DropdownMenuGroup>
+                <DropdownMenuLabel>{gt("Status legend")}</DropdownMenuLabel>
+                <DropdownMenuItem onClick={() => setShowLegend((open) => !open)}>
+                  {gt("Show status legend")}
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+              <div className="px-2 py-1.5 text-3xs leading-relaxed text-muted-foreground">
+                <p>
+                  <span className="mr-1 inline-block size-1.5 rounded-full bg-success" />
+                  {gt("Running")}
+                </p>
+                <p>
+                  <span className="mr-1 inline-block size-1.5 rounded-full bg-warning" />
+                  {gt("Waiting on you")}
+                </p>
+                <p>
+                  <span className="mr-1 inline-block size-1.5 rounded-full bg-destructive" />
+                  {gt("Failed")}
+                </p>
+                <p>
+                  <span className="mr-1 inline-block size-1.5 rounded-full bg-muted-foreground/45" />
+                  {gt("Done / idle")}
+                </p>
+              </div>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Button size="xs" variant="ghost" onClick={() => setMode("normal")}>
             <XIcon className="size-3.5" />
             {gt("Exit")}
@@ -677,6 +1054,8 @@ function AgentCanvasFlow() {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
           onNodeDragStart={() => {
             historyGesture.current = false;
             beginHistoryGesture();
@@ -902,8 +1281,44 @@ function AgentCanvasFlow() {
                   <li>{gt("Shift-click or Shift-drag to multi-select")}</li>
                   <li>{gt("Delete / Backspace removes the selection")}</li>
                   <li>{gt("Drag a handle to connect agents or notes")}</li>
+                  <li>{gt("Drag a lead handle onto empty canvas to spawn a worker")}</li>
+                  <li>{gt(". jumps to the next agent that needs you")}</li>
                   <li>{gt("Leads can broadcast a prompt to connected workers")}</li>
                   <li>{gt("Press ? to toggle this panel")}</li>
+                </ul>
+              </div>
+            </Panel>
+          ) : null}
+
+          {showLegend ? (
+            <Panel position="top-right" className="mt-3! mr-3!">
+              <div
+                className="rounded-xl border border-border bg-popover/95 p-3 text-2xs shadow-composer backdrop-blur-md"
+                data-agent-canvas-status-legend
+              >
+                <p className="mb-1.5 text-xs font-medium text-foreground">
+                  {gt("Status at a glance")}
+                </p>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-success" />
+                    {gt("Running: elapsed shows when the thread provides a start time")}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-warning" />
+                    {gt("Waiting on you: approval or input")}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-destructive" />
+                    {gt("Failed: open the card for the real error")}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <span className="size-2 rounded-full bg-muted-foreground/45" />
+                    {gt("Done / idle")}
+                  </li>
+                  <li className="pt-1 text-3xs">
+                    {gt("Cost and tokens appear only when the thread data includes them.")}
+                  </li>
                 </ul>
               </div>
             </Panel>
