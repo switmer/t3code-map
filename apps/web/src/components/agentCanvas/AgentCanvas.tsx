@@ -287,16 +287,20 @@ function AgentCanvasFlow() {
       const onScreen = viewportSize === null ? true : isNodeOnScreen(layout, view, viewportSize);
       const lod = agentCanvasLod({ focused, onScreen, zoom: view.zoom });
       const workerCount = workerKeysForLead(threadKey, edges).length;
+      // Shot demo forces preview chrome even when lod is interactive — size those to content too.
+      const shotPreview = readShotDemo(threadKey) !== null;
+      const sizedToContent = lod !== "interactive" || shotPreview;
       return {
         id: agentFlowId(threadKey),
         type: "agent" as const,
         position: { x: layout.x, y: layout.y },
         width: layout.width,
-        height: layout.height,
+        ...(sizedToContent ? {} : { height: layout.height }),
         hidden: !isInCanvasScene(layout),
         dragHandle: ".drag-handle",
-        // Explicit height keeps fan handles (20/50/80%) on the card for lead edges.
-        style: { width: layout.width, height: layout.height },
+        style: sizedToContent
+          ? { width: layout.width }
+          : { width: layout.width, height: layout.height },
         data: {
           threadKey,
           thread,
@@ -652,7 +656,10 @@ function AgentCanvasFlow() {
                 }
                 return "var(--color-muted-foreground)";
               }}
-              maskColor="color-mix(in oklab, var(--color-foreground) 8%, transparent)"
+              maskColor="color-mix(in oklab, var(--color-foreground) 12%, transparent)"
+              maskStrokeColor="color-mix(in oklab, var(--color-foreground) 45%, transparent)"
+              maskStrokeWidth={1.5}
+              offsetScale={10}
               style={{ width: 140, height: 90 }}
               className="!right-3 !bottom-16 !left-auto !m-0"
             />

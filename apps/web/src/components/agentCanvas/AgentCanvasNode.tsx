@@ -206,7 +206,9 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       data-agent-canvas-node={threadKey}
       data-agent-canvas-lod={lod}
       className={cn(
-        "group relative flex h-full w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
+        "group relative flex w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
+        // Shot demo keeps preview chrome even when lod is interactive — never stretch/clip footers.
+        lod === "interactive" && shot === null ? "h-full" : "h-auto",
         "outline-none transition-[border-color,box-shadow] duration-150",
         highlighted
           ? "border-primary/70 shadow-composer"
@@ -364,7 +366,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
                 ))}
               </div>
             </div>
-            <div className="flex h-6 shrink-0 items-center gap-2 border-t border-border/50 px-3 text-2xs text-muted-foreground">
+            <div className="flex min-h-7 shrink-0 items-center gap-2 border-t border-border/50 px-3 pt-1 pb-1.5 text-2xs text-muted-foreground">
               <RolePill role={data.role} />
               <span className="truncate">{status}</span>
               {relativeLabel ? <span className="truncate">{relativeLabel}</span> : null}

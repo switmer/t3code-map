@@ -146,6 +146,13 @@
   ry: 2;
 }
 
+/* Subtle viewport rectangle inside the minimap (stroke on the viewport hole). */
+.agent-canvas-flow .react-flow__minimap-mask {
+  fill: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  stroke: color-mix(in oklab, var(--color-foreground) 45%, transparent) !important;
+  stroke-width: 1.5px !important;
+}
+
 .agent-canvas-flow .react-flow__resize-control.handle {
   width: 7px !important;
   height: 7px !important;
