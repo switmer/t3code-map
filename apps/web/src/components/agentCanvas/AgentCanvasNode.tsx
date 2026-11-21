@@ -138,7 +138,7 @@ function previewLines(input: {
   return [input.thread.title];
 }
 
-const LEAD_HANDLE_TOPS = ["20%", "50%", "80%"] as const;
+const LEAD_HANDLE_TOPS = ["18%", "50%", "82%"] as const;
 
 export const AgentCanvasNode = memo(function AgentCanvasNode({
   id,
@@ -206,8 +206,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       data-agent-canvas-node={threadKey}
       data-agent-canvas-lod={lod}
       className={cn(
-        "group relative flex w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
-        lod === "interactive" ? "h-full" : "h-auto",
+        "group relative flex h-full w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
         "outline-none transition-[border-color,box-shadow] duration-150",
         highlighted
           ? "border-primary/70 shadow-composer"

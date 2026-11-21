@@ -9,12 +9,9 @@ export type AgentCanvasLeadFlowEdge = Edge<
 >;
 
 /**
- * When lead edges share a source handle, shift each bezier’s origin so the three
- * workers get a clear FigJam-style fan instead of a single piled exit.
+ * Lead→worker bezier. sourceX/sourceY come from the lead’s out-0/1/2 handles
+ * (20% / 50% / 80% down the right edge). Do not offset Y — that detaches the path.
  */
-const FAN_OFFSETS_Y = [-120, 0, 120] as const;
-
-/** Bezier that fans from distinct points on the lead’s right edge into each worker. */
 export function AgentCanvasLeadEdge({
   id,
   sourceX,
@@ -25,19 +22,11 @@ export function AgentCanvasLeadEdge({
   targetPosition,
   markerEnd,
   style,
-  data,
   animated,
 }: EdgeProps<AgentCanvasLeadFlowEdge>) {
-  const rawIndex = data?.fanIndex;
-  const fanIndex =
-    typeof rawIndex === "number" && Number.isFinite(rawIndex)
-      ? Math.min(Math.max(Math.round(rawIndex), 0), FAN_OFFSETS_Y.length - 1)
-      : 1;
-  const sourceOffsetY = FAN_OFFSETS_Y[fanIndex] ?? 0;
-
   const [path] = getBezierPath({
     sourceX,
-    sourceY: sourceY + sourceOffsetY,
+    sourceY,
     sourcePosition,
     targetX,
     targetY,

@@ -67,13 +67,13 @@
 
 /* Fan lead outlets down the right edge (override RF’s default top: 50%). */
 .agent-canvas-flow .react-flow__handle[data-handleid="out-0"] {
-  top: 20% !important;
+  top: 18% !important;
 }
 .agent-canvas-flow .react-flow__handle[data-handleid="out-1"] {
   top: 50% !important;
 }
 .agent-canvas-flow .react-flow__handle[data-handleid="out-2"] {
-  top: 80% !important;
+  top: 82% !important;
 }
 
 .agent-canvas-flow .react-flow__handle:hover,
@@ -125,6 +125,13 @@
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-composer);
   background: color-mix(in oklab, var(--color-popover) 94%, transparent) !important;
+}
+
+/* Beat RF panel defaults so zoom % sits clearly above the minimap. */
+.agent-canvas-flow .react-flow__panel.agent-canvas-zoom-panel {
+  right: 0.75rem !important;
+  bottom: calc(4rem + 90px + 1.25rem) !important;
+  margin: 0 !important;
 }
 
 .agent-canvas-flow .react-flow__minimap svg {
