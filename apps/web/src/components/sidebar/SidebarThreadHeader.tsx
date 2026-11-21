@@ -1,5 +1,5 @@
 import { useGT } from "gt-react";
-import { FolderPlusIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
+import { FolderPlusIcon, LayoutGridIcon, SearchIcon, SquarePenIcon, XIcon } from "lucide-react";
 import {
   type ComponentProps,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -30,6 +30,9 @@ export interface SidebarThreadHeaderProps {
   searchResultCount: number;
   activeSearchResultIndex: number;
   onClearSearch: () => void;
+  /** Whether the main agent canvas is showing. */
+  canvasMode: boolean;
+  onToggleCanvasMode: () => void;
 }
 
 export function SidebarThreadHeader({
@@ -49,6 +52,8 @@ export function SidebarThreadHeader({
   searchResultCount,
   activeSearchResultIndex,
   onClearSearch,
+  canvasMode,
+  onToggleCanvasMode,
 }: SidebarThreadHeaderProps) {
   const gt = useGT();
   const resultsVisible = isSearching && searchResultCount > 0;
@@ -108,6 +113,24 @@ export function SidebarThreadHeader({
           </>
         ) : null}
         <SidebarHeaderIconButton
+          label={
+            canvasMode
+              ? gt("Exit agent canvas")
+              : gt("Agent canvas", {
+                  $context: "sidebar toggle: show agents on an infinite canvas",
+                })
+          }
+          tooltip={
+            canvasMode
+              ? gt("Back to the normal chat layout")
+              : gt("Show every agent on a pannable canvas")
+          }
+          onClick={onToggleCanvasMode}
+          isActive={canvasMode}
+        >
+          <LayoutGridIcon />
+        </SidebarHeaderIconButton>
+        <SidebarHeaderIconButton
           label={gt("New thread")}
           tooltip={
             showNewThreadInProjectHint ? (
@@ -139,12 +162,14 @@ export function SidebarHeaderIconButton({
   label,
   tooltip = label,
   className,
+  isActive = false,
   children,
   ...rest
 }: {
   label: string;
   tooltip?: ReactNode;
   className?: string | undefined;
+  isActive?: boolean;
   children?: ReactNode;
 } & Omit<
   ComponentProps<typeof SidebarMenuButton>,
@@ -158,6 +183,7 @@ export function SidebarHeaderIconButton({
             size="icon"
             type="button"
             aria-label={label}
+            isActive={isActive}
             {...rest}
             className={cn("relative size-7 shrink-0", className)}
           />

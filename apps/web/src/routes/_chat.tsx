@@ -1,5 +1,7 @@
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 
+import { useAgentCanvasStore } from "../agentCanvasStore";
+import { AgentCanvas } from "../components/agentCanvas/AgentCanvas";
 import { ThreadRouteView } from "../components/ThreadRouteView";
 import { GlobalVoiceInputIndicator } from "../components/chat/GlobalVoiceInputIndicator";
 import { isAppModalPage } from "../components/sidebar/mainAppLocation";
@@ -12,6 +14,15 @@ import { useShownThreadRouteTarget } from "../hooks/useShownThreadRouteTarget";
 function ChatRouteLayout() {
   // Render both routes here so draft promotion keeps the same ChatView mounted.
   const { shownTarget, modalOpen } = useShownThreadRouteTarget();
+  const canvasMode = useAgentCanvasStore((state) => state.mode === "canvas");
+  if (canvasMode && !modalOpen) {
+    return (
+      <>
+        <AgentCanvas />
+        <GlobalVoiceInputIndicator />
+      </>
+    );
+  }
   return (
     <>
       {shownTarget?.kind === "server" && !modalOpen ? (

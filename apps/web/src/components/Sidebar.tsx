@@ -256,6 +256,7 @@ import {
 } from "./ui/combobox";
 import { SidebarContent, SidebarGroup, useSidebar } from "./ui/sidebar";
 import { SidebarChromeFooter, SidebarChromeHeader } from "./sidebar/SidebarChrome";
+import { useAgentCanvasStore } from "../agentCanvasStore";
 import { SidebarHeaderIconButton, SidebarThreadHeader } from "./sidebar/SidebarThreadHeader";
 import { TooltipProvider } from "./ui/tooltip";
 import {
@@ -924,6 +925,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const router = useRouter();
   const { isMobile, setOpenMobile } = useSidebar();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
+  const canvasMode = useAgentCanvasStore((state) => state.mode === "canvas");
+  const toggleCanvasMode = useAgentCanvasStore((state) => state.toggleMode);
   const confirmThreadDelete = useClientSettings((s) => s.confirmThreadDelete);
   const confirmThreadArchive = useClientSettings((s) => s.confirmThreadArchive);
   const timestampFormat = useClientSettings((s) => s.timestampFormat);
@@ -3235,6 +3238,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
               searchResultCount={threadSearchResults.length}
               activeSearchResultIndex={activeSearchResultIndex}
               onClearSearch={clearThreadSearch}
+              canvasMode={canvasMode}
+              onToggleCanvasMode={toggleCanvasMode}
             />
           </SidebarGroup>
         }
