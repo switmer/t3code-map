@@ -22,8 +22,8 @@ describe("agent canvas layout", () => {
     expect(defaultAgentNodeLayout(0)).toMatchObject({
       x: 0,
       y: 80,
-      width: 340,
-      height: 124,
+      width: 480,
+      height: 440,
       role: "none",
     });
     expect(defaultAgentNodeLayout(1).x).toBeGreaterThan(defaultAgentNodeLayout(0).width);
@@ -54,15 +54,16 @@ describe("agent canvas layout", () => {
     expect(second.x).toBe(first.x);
   });
 
-  it("picks lod from focus, visibility, and zoom", () => {
+  it("picks lod from visibility and zoom (all on-screen agents interactive at normal zoom)", () => {
     expect(agentCanvasLod({ focused: true, onScreen: true, zoom: 1 })).toBe("interactive");
-    expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 1 })).toBe("preview");
+    expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 1 })).toBe("interactive");
+    expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 0.45 })).toBe("preview");
     expect(agentCanvasLod({ focused: true, onScreen: true, zoom: 0.3 })).toBe("chip");
     expect(agentCanvasLod({ focused: true, onScreen: false, zoom: 1 })).toBe("chip");
   });
 
   it("detects off-screen cards and clamps layouts", () => {
-    const layout = { x: 0, y: 0, width: 340, height: 124 };
+    const layout = { x: 0, y: 0, width: 480, height: 440 };
     expect(isNodeOnScreen(layout, { x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 })).toBe(true);
     expect(
       isNodeOnScreen(layout, { x: -2000, y: -2000, zoom: 1 }, { width: 800, height: 600 }),
@@ -70,8 +71,8 @@ describe("agent canvas layout", () => {
     expect(
       clampAgentNodeLayout({ x: -4, y: 8, width: 100, height: 50, role: "none" }),
     ).toMatchObject({
-      width: 280,
-      height: 100,
+      width: 360,
+      height: 280,
     });
   });
 

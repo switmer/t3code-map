@@ -20,7 +20,7 @@ const NODE_GAP_Y = 72;
 const COLUMNS = 2;
 const LEAD_TO_WORKER_GAP_X = 104;
 const WORKER_STACK_GAP_Y = 40;
-const DEFAULT_WORKER_NODE_SIZE = { width: 320, height: 110 } as const;
+const DEFAULT_WORKER_NODE_SIZE = { width: 480, height: 440 } as const;
 /** Nodes parked farther than this are ignored by fit-view / minimap framing. */
 const AGENT_CANVAS_SCENE_BOUND = 2800;
 
@@ -111,8 +111,8 @@ export function clampAgentNodeLayout(layout: AgentCanvasNodeLayout): AgentCanvas
 }
 
 /**
- * Detail level for a node. Only the focused on-screen node is interactive; others are
- * previews or chips so many agents stay cheap to draw.
+ * Zoom-based detail for a node. Every on-screen agent is a live thread at normal zoom;
+ * far-out zoom falls back to preview/chip so ~10–20 nodes stay smooth.
  */
 export function agentCanvasLod(input: {
   readonly focused: boolean;
@@ -120,9 +120,9 @@ export function agentCanvasLod(input: {
   readonly zoom: number;
 }): AgentCanvasLod {
   if (!input.onScreen) return "chip";
-  if (input.zoom < 0.4) return "chip";
-  if (input.focused && input.zoom >= 0.55) return "interactive";
-  return "preview";
+  if (input.zoom < 0.35) return "chip";
+  if (input.zoom < 0.55) return "preview";
+  return "interactive";
 }
 
 export function isNodeOnScreen(

@@ -159,7 +159,11 @@
   border-radius: 2px !important;
 }
 
-/* Compact banners inside live canvas sessions. */
+/* Compact chrome inside live canvas thread nodes. */
+[data-agent-canvas-session] {
+  font-size: var(--text-xs);
+}
+
 [data-agent-canvas-session] .chat-banner-lane {
   left: 0.5rem;
   right: 0.5rem;

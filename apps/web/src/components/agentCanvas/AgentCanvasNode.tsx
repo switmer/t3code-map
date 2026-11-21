@@ -163,8 +163,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
   const thread = data.thread;
   const threadKey = data.threadKey;
   const shot = readShotDemo(threadKey);
-  // Shot/demo harness keeps every card in preview so live provider banners never pollute screenshots.
-  const lod = shot !== null && data.lod === "interactive" ? "preview" : data.lod;
+  // Live threads stay interactive; shot-demo only paints preview/chip chrome when LOD asks for it.
+  const lod = data.lod;
   const tone = shot?.tone ?? threadStatusTone(thread);
   const status = shot?.statusLabel ?? threadStatusLabel(thread, gt);
   const title = shot?.title ?? thread.title;
@@ -207,8 +207,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       data-agent-canvas-lod={lod}
       className={cn(
         "group relative flex w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
-        // Shot demo keeps preview chrome even when lod is interactive — never stretch/clip footers.
-        lod === "interactive" && shot === null ? "h-full" : "h-auto",
+        lod === "interactive" ? "h-full" : "h-auto",
         "outline-none transition-[border-color,box-shadow] duration-150",
         highlighted
           ? "border-primary/70 shadow-composer"
@@ -216,10 +215,13 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         isLeadLike && "ring-1 ring-primary/22",
         isLeadLike && highlighted && "ring-primary/40",
       )}
+      onPointerDownCapture={() => {
+        if (!data.focused) data.onFocus();
+      }}
     >
       <NodeResizer
-        minWidth={260}
-        minHeight={100}
+        minWidth={360}
+        minHeight={280}
         maxWidth={1400}
         maxHeight={1200}
         isVisible={highlighted}

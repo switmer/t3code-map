@@ -226,7 +226,21 @@ function AgentCanvasFlow() {
         setTool("pan");
         return;
       }
-      if (event.key === "Escape") setShowShortcuts(false);
+      if (event.key === "Escape") {
+        setShowShortcuts(false);
+        // Esc from inside a thread node returns focus to the canvas (not exit canvas mode).
+        if (
+          target instanceof HTMLElement &&
+          target.closest("[data-agent-canvas-session]") !== null
+        ) {
+          event.preventDefault();
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          document
+            .querySelector<HTMLElement>("[data-agent-canvas-surface]")
+            ?.focus({ preventScroll: true });
+        }
+        return;
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -287,9 +301,9 @@ function AgentCanvasFlow() {
       const onScreen = viewportSize === null ? true : isNodeOnScreen(layout, view, viewportSize);
       const lod = agentCanvasLod({ focused, onScreen, zoom: view.zoom });
       const workerCount = workerKeysForLead(threadKey, edges).length;
-      // Shot demo forces preview chrome even when lod is interactive — size those to content too.
-      const shotPreview = readShotDemo(threadKey) !== null;
-      const sizedToContent = lod !== "interactive" || shotPreview;
+      // Interactive threads keep a stored height so the live ChatView + composer have room;
+      // preview/chip cards size to their compact chrome.
+      const sizedToContent = lod !== "interactive";
       return {
         id: agentFlowId(threadKey),
         type: "agent" as const,
@@ -593,7 +607,12 @@ function AgentCanvasFlow() {
         </div>
       </div>
 
-      <div ref={setSurface} className="relative min-h-0 flex-1">
+      <div
+        ref={setSurface}
+        className="relative min-h-0 flex-1 outline-none"
+        tabIndex={-1}
+        data-agent-canvas-surface
+      >
         <ReactFlow
           className="agent-canvas-flow"
           nodes={flowNodes}
@@ -629,6 +648,7 @@ function AgentCanvasFlow() {
           zoomOnDoubleClick={false}
           deleteKeyCode={["Backspace", "Delete"]}
           multiSelectionKeyCode="Shift"
+          onlyRenderVisibleElements
           fitView={false}
           proOptions={{ hideAttribution: true }}
           onPaneClick={endHistoryGesture}
@@ -674,10 +694,10 @@ function AgentCanvasFlow() {
                 aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
                 onClick={() => {
                   void fitView({
-                    padding: 0.08,
+                    padding: 0.1,
                     duration: 220,
                     nodes: sceneNodes,
-                    minZoom: 0.9,
+                    minZoom: 0.35,
                     maxZoom: 1,
                   }).then(() => {
                     const next = getViewport();
@@ -861,7 +881,8 @@ function AgentCanvasFlow() {
 
 /**
  * Infinite canvas of agent threads for the main app. Built on React Flow for solid move/resize,
- * connections, selection, minimap, and fit-to-view. Only the focused agent mounts a live ChatView.
+ * connections, selection, minimap, and fit-to-view. On-screen agents at normal zoom each mount a
+ * live ChatView; far-out zoom falls back to preview/chip for performance.
  */
 export function AgentCanvas() {
   return (
