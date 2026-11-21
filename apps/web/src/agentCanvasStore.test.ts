@@ -23,8 +23,8 @@ describe("agentCanvasStore", () => {
     useAgentCanvasStore.getState().setAgentLayout("env:thread", {
       x: 40,
       y: 80,
-      width: 400,
-      height: 360,
+      width: 340,
+      height: 124,
       role: "lead",
     });
     useAgentCanvasStore.getState().addEdge({

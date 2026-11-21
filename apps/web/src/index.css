@@ -1137,15 +1137,20 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
   position: relative;
 }
 @utility agent-canvas-sticky {
-  background: color-mix(in oklab, var(--color-warning-surface) 55%, var(--color-background));
-  border: 1px solid color-mix(in oklab, var(--color-warning) 14%, transparent);
+  background: color-mix(in oklab, var(--color-warning-surface) 62%, var(--color-background));
+  border: 1px solid color-mix(in oklab, var(--color-warning) 16%, transparent);
   box-shadow:
     0 1px 2px color-mix(in oklab, var(--color-foreground) 5%, transparent),
     0 8px 18px color-mix(in oklab, var(--color-foreground) 4%, transparent);
 }
 .dark .agent-canvas-sticky {
-  background: color-mix(in oklab, var(--color-warning-surface) 48%, var(--color-card));
-  border-color: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  /* Amber parchment on dark — brighter wash so notes read as paper, not muddy brown. */
+  background: color-mix(in oklab, oklch(0.84 0.12 85) 28%, var(--color-card));
+  border-color: color-mix(in oklab, oklch(0.84 0.12 85) 42%, var(--color-border));
+  color: var(--color-foreground);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--color-foreground) 8%, transparent),
+    0 10px 22px color-mix(in oklab, var(--color-foreground) 6%, transparent);
 }
 
 /* Suppress all transitions during theme changes */

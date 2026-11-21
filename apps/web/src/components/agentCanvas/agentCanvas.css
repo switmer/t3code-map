@@ -58,8 +58,22 @@
 
 .agent-canvas-flow .react-flow__handle-right,
 .agent-canvas-flow .react-flow__handle[data-handleid="out"],
+.agent-canvas-flow .react-flow__handle[data-handleid="out-0"],
+.agent-canvas-flow .react-flow__handle[data-handleid="out-1"],
+.agent-canvas-flow .react-flow__handle[data-handleid="out-2"],
 .agent-canvas-flow .react-flow__handle[data-handleid="out-bottom"] {
   background: var(--color-primary);
+}
+
+/* Fan lead outlets down the right edge (override RF’s default top: 50%). */
+.agent-canvas-flow .react-flow__handle[data-handleid="out-0"] {
+  top: 20% !important;
+}
+.agent-canvas-flow .react-flow__handle[data-handleid="out-1"] {
+  top: 50% !important;
+}
+.agent-canvas-flow .react-flow__handle[data-handleid="out-2"] {
+  top: 80% !important;
 }
 
 .agent-canvas-flow .react-flow__handle:hover,
@@ -73,19 +87,22 @@
 }
 
 .agent-canvas-flow .react-flow__edge.lead path {
-  stroke: color-mix(in oklab, var(--color-primary) 70%, var(--color-muted-foreground));
-  stroke-width: 1.5;
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 48%, transparent);
+  stroke-width: 1.15;
+  stroke-dasharray: none !important;
 }
 
+.agent-canvas-flow .react-flow__edge.lead.is-active path,
 .agent-canvas-flow .react-flow__edge.lead.animated path {
-  stroke: var(--color-primary);
-  stroke-dasharray: 5 4;
-  animation: agent-canvas-edge-flow 0.9s linear infinite;
+  stroke: color-mix(in oklab, var(--color-primary) 72%, var(--color-muted-foreground));
+  stroke-width: 1.35;
+  stroke-dasharray: 4 5 !important;
+  animation: agent-canvas-edge-flow 1.1s linear infinite;
 }
 
 .agent-canvas-flow .react-flow__edge.link path {
-  stroke: color-mix(in oklab, var(--color-muted-foreground) 38%, transparent);
-  stroke-width: 1.15;
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 34%, transparent);
+  stroke-width: 1.1;
 }
 
 .agent-canvas-flow .react-flow__edge.selected path {
@@ -107,11 +124,19 @@
   overflow: hidden;
   border: 1px solid var(--color-border);
   box-shadow: var(--shadow-composer);
+  background: color-mix(in oklab, var(--color-popover) 94%, transparent) !important;
 }
 
 .agent-canvas-flow .react-flow__minimap svg {
   width: 140px !important;
   height: 90px !important;
+}
+
+.agent-canvas-flow .react-flow__minimap-node {
+  fill: var(--color-muted-foreground);
+  stroke: var(--color-border);
+  rx: 2;
+  ry: 2;
 }
 
 .agent-canvas-flow .react-flow__resize-control.handle {

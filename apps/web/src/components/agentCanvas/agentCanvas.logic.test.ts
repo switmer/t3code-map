@@ -22,8 +22,8 @@ describe("agent canvas layout", () => {
     expect(defaultAgentNodeLayout(0)).toMatchObject({
       x: 0,
       y: 80,
-      width: 400,
-      height: 360,
+      width: 340,
+      height: 124,
       role: "none",
     });
     expect(defaultAgentNodeLayout(1).x).toBeGreaterThan(defaultAgentNodeLayout(0).width);
@@ -48,7 +48,7 @@ describe("agent canvas layout", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
     const first = defaultWorkerLayoutForLead(lead, 0);
     const second = defaultWorkerLayoutForLead(lead, 1);
-    expect(first.x).toBe(lead.x + lead.width + 120);
+    expect(first.x).toBe(lead.x + lead.width + 104);
     expect(first.y).toBe(lead.y);
     expect(second.y).toBeGreaterThan(first.y + first.height);
     expect(second.x).toBe(first.x);
@@ -62,7 +62,7 @@ describe("agent canvas layout", () => {
   });
 
   it("detects off-screen cards and clamps layouts", () => {
-    const layout = { x: 0, y: 0, width: 400, height: 360 };
+    const layout = { x: 0, y: 0, width: 340, height: 124 };
     expect(isNodeOnScreen(layout, { x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 })).toBe(true);
     expect(
       isNodeOnScreen(layout, { x: -2000, y: -2000, zoom: 1 }, { width: 800, height: 600 }),
@@ -70,8 +70,8 @@ describe("agent canvas layout", () => {
     expect(
       clampAgentNodeLayout({ x: -4, y: 8, width: 100, height: 50, role: "none" }),
     ).toMatchObject({
-      width: 300,
-      height: 220,
+      width: 280,
+      height: 100,
     });
   });
 

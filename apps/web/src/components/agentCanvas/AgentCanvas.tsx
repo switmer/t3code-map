@@ -60,7 +60,9 @@ import {
   createNoteId,
   defaultNotePlacement,
   defaultWorkerLayoutForLead,
+  isInCanvasScene,
   isNodeOnScreen,
+  leadSourceHandleForIndex,
   newCanvasEdgeId,
   noteFlowId,
   parseAgentFlowId,
@@ -70,6 +72,7 @@ import {
   resolveEdgeKind,
   workerKeysForLead,
 } from "./agentCanvas.logic";
+import { AgentCanvasLeadEdge } from "./AgentCanvasLeadEdge";
 import { AgentCanvasNode, type AgentCanvasAgentFlowNode } from "./AgentCanvasNode";
 import { AgentCanvasNoteNode, type AgentCanvasNoteFlowNode } from "./AgentCanvasNoteNode";
 
@@ -80,28 +83,43 @@ const nodeTypes = {
   note: AgentCanvasNoteNode,
 };
 
-function toFlowEdge(input: { readonly edge: AgentCanvasEdge; readonly animated: boolean }): Edge {
+const edgeTypes = {
+  agentLead: AgentCanvasLeadEdge,
+};
+
+function toFlowEdge(input: {
+  readonly edge: AgentCanvasEdge;
+  readonly animated: boolean;
+  readonly sourceHandle?: string;
+  readonly fanIndex?: number;
+}): Edge {
   const { edge, animated } = input;
+  const sourceHandle = input.sourceHandle ?? edge.sourceHandle;
+  // React Flow edge markers styled in agentCanvas.css (not Tailwind utilities).
+  const className = `${edge.kind === "lead" ? "lead" : "link"}${animated ? " is-active" : ""}`;
+  const fanIndex = input.fanIndex;
   const next: Edge = {
     id: edge.id,
     source: edge.source,
     target: edge.target,
-    type: "default",
-    className: edge.kind === "lead" ? "lead" : "link",
+    type: edge.kind === "lead" ? "agentLead" : "default",
+    className,
     animated,
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      width: 14,
-      height: 14,
-      color:
-        edge.kind === "lead"
-          ? "color-mix(in oklab, var(--color-primary) 75%, transparent)"
-          : "color-mix(in oklab, var(--color-muted-foreground) 55%, transparent)",
+      width: 12,
+      height: 12,
+      color: animated
+        ? "color-mix(in oklab, var(--color-primary) 80%, transparent)"
+        : "color-mix(in oklab, var(--color-muted-foreground) 50%, transparent)",
     },
-    data: { kind: edge.kind },
+    data: {
+      kind: edge.kind,
+      ...(fanIndex !== undefined ? { fanIndex } : {}),
+    },
   };
-  if (edge.sourceHandle) next.sourceHandle = edge.sourceHandle;
-  if (edge.targetHandle) next.targetHandle = edge.targetHandle;
+  if (sourceHandle !== undefined) next.sourceHandle = sourceHandle;
+  next.targetHandle = edge.targetHandle ?? "in";
   return next;
 }
 
@@ -269,12 +287,19 @@ function AgentCanvasFlow() {
       const onScreen = viewportSize === null ? true : isNodeOnScreen(layout, view, viewportSize);
       const lod = agentCanvasLod({ focused, onScreen, zoom: view.zoom });
       const workerCount = workerKeysForLead(threadKey, edges).length;
+      // Preview/chip cards size to content; interactive keeps the stored height for the live session.
+      const sizedToContent = lod !== "interactive";
       return {
         id: agentFlowId(threadKey),
         type: "agent" as const,
         position: { x: layout.x, y: layout.y },
+        width: layout.width,
+        ...(sizedToContent ? {} : { height: layout.height }),
+        hidden: !isInCanvasScene(layout),
         dragHandle: ".drag-handle",
-        style: { width: layout.width, height: layout.height },
+        style: sizedToContent
+          ? { width: layout.width }
+          : { width: layout.width, height: layout.height },
         data: {
           threadKey,
           thread,
@@ -293,29 +318,78 @@ function AgentCanvasFlow() {
           id: noteFlowId(note.id),
           type: "note" as const,
           position: { x: note.x, y: note.y },
+          width: note.width,
+          height: note.height,
+          hidden: !isInCanvasScene(note),
           style: { width: note.width, height: note.height },
           data: { noteId: note.id, text: note.text },
         }) satisfies AgentCanvasNoteFlowNode,
     ),
   ];
 
+  const leadFanOrder = new Map<string, string[]>();
+  for (const edge of edges) {
+    if (edge.kind !== "lead") continue;
+    const targets = leadFanOrder.get(edge.source) ?? [];
+    targets.push(edge.target);
+    leadFanOrder.set(edge.source, targets);
+  }
+  for (const [source, targets] of leadFanOrder) {
+    targets.sort((a, b) => {
+      const aAgent = parseAgentFlowId(a);
+      const bAgent = parseAgentFlowId(b);
+      const aY = aAgent !== null ? (agents[aAgent]?.y ?? 0) : 0;
+      const bY = bAgent !== null ? (agents[bAgent]?.y ?? 0) : 0;
+      return aY - bY;
+    });
+    leadFanOrder.set(source, targets);
+  }
+
   const flowEdges: Edge[] = edges.map((edge) => {
-    const sourceAgent = parseAgentFlowId(edge.source);
-    const sourceThread =
-      sourceAgent === null
+    const targetAgent = parseAgentFlowId(edge.target);
+    const targetThread =
+      targetAgent === null
         ? undefined
         : threads.find(
             (candidate) =>
               scopedThreadKey(scopeThreadRef(candidate.environmentId, candidate.id)) ===
-              sourceAgent,
+              targetAgent,
           );
-    const shotTone = sourceAgent === null ? null : readShotDemo(sourceAgent)?.tone;
-    const leadAnimated =
+    const targetShotTone = targetAgent === null ? null : readShotDemo(targetAgent)?.tone;
+    // Animate only the edge into an actively running worker — keep the rest solid + muted.
+    const edgeActive =
       edge.kind === "lead" &&
-      (shotTone === "running" ||
-        sourceThread?.runtime?.status === "running" ||
-        sourceThread?.latestRun?.status === "running");
-    return toFlowEdge({ edge, animated: Boolean(leadAnimated) });
+      (targetShotTone === "running" ||
+        targetThread?.runtime?.status === "running" ||
+        targetThread?.latestRun?.status === "running");
+    let sourceHandle = edge.sourceHandle;
+    let fanIndex: number | undefined;
+    if (edge.kind === "lead") {
+      const ordered = leadFanOrder.get(edge.source) ?? [];
+      const index = ordered.indexOf(edge.target);
+      if (index >= 0) {
+        fanIndex = index;
+        sourceHandle = leadSourceHandleForIndex(index);
+      }
+    }
+    // Lead edges: fan sourceHandles + fanIndex so AgentCanvasLeadEdge can spread origins.
+    if (edge.kind === "lead") {
+      return fanIndex === undefined
+        ? toFlowEdge({
+            edge,
+            animated: Boolean(edgeActive),
+            ...(sourceHandle !== undefined ? { sourceHandle } : {}),
+          })
+        : toFlowEdge({
+            edge,
+            animated: Boolean(edgeActive),
+            fanIndex,
+            ...(sourceHandle !== undefined ? { sourceHandle } : {}),
+          });
+    }
+    return sourceHandle === undefined
+      ? toFlowEdge({ edge, animated: Boolean(edgeActive) })
+      : toFlowEdge({ edge, animated: Boolean(edgeActive), sourceHandle });
   });
 
   const beginHistoryGesture = () => {
@@ -404,13 +478,21 @@ function AgentCanvasFlow() {
     const sourceAgent = parseAgentFlowId(connection.source);
     const sourceRole = sourceAgent !== null ? (agents[sourceAgent]?.role ?? "none") : "none";
     const kind = resolveEdgeKind({ sourceRole });
+    const existingLeadTargets =
+      kind === "lead"
+        ? edges.filter((edge) => edge.kind === "lead" && edge.source === connection.source).length
+        : 0;
+    const sourceHandle =
+      kind === "lead"
+        ? (connection.sourceHandle ?? leadSourceHandleForIndex(existingLeadTargets))
+        : (connection.sourceHandle ?? "out");
     pushHistory();
     addStoreEdge({
       id: newCanvasEdgeId(connection.source, connection.target),
       source: connection.source,
       target: connection.target,
       kind,
-      sourceHandle: connection.sourceHandle ?? "out",
+      sourceHandle,
       targetHandle: connection.targetHandle ?? "in",
     });
     if (kind === "lead" && sourceAgent !== null) {
@@ -493,6 +575,7 @@ function AgentCanvasFlow() {
 
   const zoomPercent = Math.round(view.zoom * 100);
   const panMode = tool === "pan";
+  const sceneNodes = flowNodes.filter((node) => isInCanvasScene(node.position));
 
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
@@ -515,6 +598,7 @@ function AgentCanvasFlow() {
           nodes={flowNodes}
           edges={flowEdges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
@@ -556,24 +640,47 @@ function AgentCanvasFlow() {
             color="color-mix(in oklab, var(--color-border) 70%, transparent)"
           />
 
-          <MiniMap
-            pannable
-            zoomable={false}
-            nodeStrokeWidth={1.5}
-            style={{ width: 140, height: 90 }}
-            className="!right-3 !bottom-14 !left-auto !m-0"
-          />
+          {sceneNodes.length >= 3 ? (
+            <MiniMap
+              pannable
+              zoomable={false}
+              nodeStrokeWidth={1.25}
+              nodeColor={(node) => {
+                if (node.type === "note") {
+                  return "color-mix(in oklab, var(--color-warning) 45%, var(--color-muted))";
+                }
+                const role = (node.data as { role?: string } | undefined)?.role;
+                if (role === "lead" || role === "coordinator") {
+                  return "color-mix(in oklab, var(--color-primary) 55%, var(--color-muted))";
+                }
+                return "var(--color-muted-foreground)";
+              }}
+              maskColor="color-mix(in oklab, var(--color-foreground) 8%, transparent)"
+              style={{ width: 140, height: 90 }}
+              className="!right-3 !bottom-16 !left-auto !m-0"
+            />
+          ) : null}
 
-          <Panel position="bottom-right" className="m-3!">
+          <Panel position="bottom-right" className="m-3! mb-16!">
             <div className="flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-0.5 shadow-composer backdrop-blur-md">
               <Button
                 size="xs"
                 variant="ghost-muted"
                 aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
                 onClick={() => {
-                  void fitView({ padding: 0.22, duration: 220 }).then(() => {
+                  void fitView({
+                    padding: 0.4,
+                    duration: 220,
+                    nodes: sceneNodes,
+                    minZoom: 0.24,
+                    maxZoom: 0.62,
+                  }).then(() => {
                     const next = getViewport();
-                    setView({ x: next.x, y: next.y, zoom: next.zoom });
+                    // Nudge up so the floating toolbar sits in clear space under the scene.
+                    const cleared = { x: next.x, y: next.y + 72, zoom: Math.min(next.zoom, 0.62) };
+                    void setViewport(cleared, { duration: 0 }).then(() => {
+                      setView(cleared);
+                    });
                   });
                 }}
               >
@@ -582,7 +689,7 @@ function AgentCanvasFlow() {
             </div>
           </Panel>
 
-          <Panel position="bottom-center" className="mb-4!">
+          <Panel position="bottom-center" className="mb-5!">
             <div className="flex items-center gap-0.5 rounded-full border border-border bg-popover/95 p-1 shadow-composer backdrop-blur-md">
               <Tooltip>
                 <TooltipTrigger

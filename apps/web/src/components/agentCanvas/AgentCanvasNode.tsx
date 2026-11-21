@@ -1,8 +1,15 @@
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
-import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
+import {
+  Handle,
+  NodeResizer,
+  Position,
+  useUpdateNodeInternals,
+  type Node,
+  type NodeProps,
+} from "@xyflow/react";
 import { useGT } from "gt-react";
 import { CrownIcon, MoreHorizontalIcon, SendIcon, UsersIcon, WaypointsIcon } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useEffect, useState } from "react";
 
 import { useAgentCanvasStore, type AgentCanvasRole } from "../../agentCanvasStore";
 import { useRelativeTimeState } from "../../hooks/useRelativeTimeState";
@@ -16,7 +23,12 @@ import {
 } from "../ui/menu";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import type { AgentCanvasLod } from "./agentCanvas.logic";
-import { agentCanvasPreviewKind, readShotDemo, workerKeysForLead } from "./agentCanvas.logic";
+import {
+  agentCanvasPreviewKind,
+  LEAD_SOURCE_HANDLES,
+  readShotDemo,
+  workerKeysForLead,
+} from "./agentCanvas.logic";
 import { AgentCanvasSession } from "./AgentCanvasSession";
 
 export type AgentCanvasAgentFlowNode = Node<
@@ -115,7 +127,7 @@ function previewLines(input: {
       .split(/\n+/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .slice(0, 4);
+      .slice(0, 5);
   }
   if (kind === "completed") {
     return [input.gt("Last run finished. Open to continue or inspect tools.")];
@@ -126,11 +138,15 @@ function previewLines(input: {
   return [input.thread.title];
 }
 
+const LEAD_HANDLE_TOPS = ["20%", "50%", "80%"] as const;
+
 export const AgentCanvasNode = memo(function AgentCanvasNode({
+  id,
   data,
   selected,
 }: NodeProps<AgentCanvasAgentFlowNode>) {
   const gt = useGT();
+  const updateNodeInternals = useUpdateNodeInternals();
   const setAgentRole = useAgentCanvasStore((state) => state.setAgentRole);
   const pushHistory = useAgentCanvasStore((state) => state.pushHistory);
   const edges = useAgentCanvasStore((state) => state.edges);
@@ -139,6 +155,11 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
   const [broadcastBusy, setBroadcastBusy] = useState(false);
   const relativeUpdated = useRelativeTimeState(data.thread.updatedAt);
 
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- RF must remeasure fan-out handle positions
+  useEffect(() => {
+    updateNodeInternals(id);
+  }, [id, updateNodeInternals]);
+
   const thread = data.thread;
   const threadKey = data.threadKey;
   const shot = readShotDemo(threadKey);
@@ -146,6 +167,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
   const lod = shot !== null && data.lod === "interactive" ? "preview" : data.lod;
   const tone = shot?.tone ?? threadStatusTone(thread);
   const status = shot?.statusLabel ?? threadStatusLabel(thread, gt);
+  const title = shot?.title ?? thread.title;
   const workers = workerKeysForLead(threadKey, edges);
   const isLeadLike = data.role === "lead" || data.role === "coordinator";
   const highlighted = selected || data.focused;
@@ -164,7 +186,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         type="button"
         data-agent-canvas-node={threadKey}
         data-agent-canvas-lod={lod}
-        aria-label={`${thread.title} · ${status}`}
+        aria-label={`${title} · ${status}`}
         onClick={data.onFocus}
         className={cn(
           "flex h-full w-full items-center gap-2 overflow-hidden rounded-lg border bg-card px-2.5 text-left",
@@ -173,9 +195,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         )}
       >
         <StatusDot tone={tone} />
-        <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-tight">
-          {thread.title}
-        </span>
+        <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-tight">{title}</span>
         <RolePill role={data.role} />
       </button>
     );
@@ -186,7 +206,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       data-agent-canvas-node={threadKey}
       data-agent-canvas-lod={lod}
       className={cn(
-        "group relative flex h-full w-full flex-col overflow-hidden rounded-xl border bg-card",
+        "group relative flex w-full flex-col justify-start overflow-hidden rounded-xl border bg-card",
+        lod === "interactive" ? "h-full" : "h-auto",
         "outline-none transition-[border-color,box-shadow] duration-150",
         highlighted
           ? "border-primary/70 shadow-composer"
@@ -196,8 +217,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       )}
     >
       <NodeResizer
-        minWidth={300}
-        minHeight={220}
+        minWidth={260}
+        minHeight={100}
         maxWidth={1400}
         maxHeight={1200}
         isVisible={highlighted}
@@ -206,71 +227,80 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
       />
 
       <Handle type="target" position={Position.Left} id="in" className="!-left-1" />
+      <Handle type="target" position={Position.Top} id="in-top" className="!-top-1" />
+      {/* Always mount fan outlets so lead edges can leave from distinct Y positions. */}
+      {LEAD_SOURCE_HANDLES.map((handleId, index) => (
+        <Handle
+          key={handleId}
+          type="source"
+          position={Position.Right}
+          id={handleId}
+          className="!-right-1"
+          style={{ top: LEAD_HANDLE_TOPS[index], transform: "translate(50%, -50%)" }}
+        />
+      ))}
       <Handle type="source" position={Position.Right} id="out" className="!-right-1" />
       <Handle type="source" position={Position.Bottom} id="out-bottom" className="!-bottom-1" />
-      <Handle type="target" position={Position.Top} id="in-top" className="!-top-1" />
 
-      <div className="drag-handle flex h-9 shrink-0 cursor-grab items-center gap-1.5 border-b border-border/60 px-2.5 active:cursor-grabbing">
-        <StatusDot tone={tone} />
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                className="min-w-0 flex-1 truncate text-left text-sm font-medium tracking-tight outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                onClick={data.onFocus}
-              />
-            }
-          >
-            {thread.title}
-          </TooltipTrigger>
-          <TooltipPopup>{thread.title}</TooltipPopup>
-        </Tooltip>
-        <span className="hidden shrink-0 text-2xs text-muted-foreground sm:inline">
-          {modelLabel}
-        </span>
-        <RolePill role={data.role} />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                size="icon-micro"
-                variant="ghost-muted"
-                className="shrink-0"
-                aria-label={gt("Node actions")}
-              />
-            }
-          >
-            <MoreHorizontalIcon className="size-3.5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-40">
-            <DropdownMenuItem onClick={data.onFocus}>{gt("Open live session")}</DropdownMenuItem>
-            {(
-              [
-                ["none", gt("No role")],
-                ["lead", gt("Lead")],
-                ["coordinator", gt("Coordinator")],
-                ["worker", gt("Worker")],
-              ] as const
-            ).map(([role, label]) => (
-              <DropdownMenuItem
-                key={role}
-                onClick={() => {
-                  pushHistory();
-                  setAgentRole(threadKey, role);
-                }}
-              >
-                {label}
-              </DropdownMenuItem>
-            ))}
-            {isLeadLike && workers.length > 0 ? (
-              <DropdownMenuItem onClick={() => setBroadcastOpen(true)}>
-                {gt("Send to workers")}
-              </DropdownMenuItem>
-            ) : null}
-          </DropdownMenuContent>
-        </DropdownMenu>
+      <div className="drag-handle flex shrink-0 cursor-grab flex-col gap-0.5 border-b border-border/60 px-2.5 py-1.5 active:cursor-grabbing">
+        <div className="flex items-start gap-1.5">
+          <StatusDot tone={tone} />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <button
+                  type="button"
+                  className="min-w-0 flex-1 py-0.5 text-left text-sm leading-snug font-medium tracking-tight whitespace-normal outline-none focus-visible:rounded-sm focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  onClick={data.onFocus}
+                />
+              }
+            >
+              <span className="line-clamp-2 wrap-break-word">{title}</span>
+            </TooltipTrigger>
+            <TooltipPopup>{title}</TooltipPopup>
+          </Tooltip>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  size="icon-micro"
+                  variant="ghost-muted"
+                  className="shrink-0"
+                  aria-label={gt("Node actions")}
+                />
+              }
+            >
+              <MoreHorizontalIcon className="size-3.5" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-40">
+              <DropdownMenuItem onClick={data.onFocus}>{gt("Open live session")}</DropdownMenuItem>
+              {(
+                [
+                  ["none", gt("No role")],
+                  ["lead", gt("Lead")],
+                  ["coordinator", gt("Coordinator")],
+                  ["worker", gt("Worker")],
+                ] as const
+              ).map(([role, label]) => (
+                <DropdownMenuItem
+                  key={role}
+                  onClick={() => {
+                    pushHistory();
+                    setAgentRole(threadKey, role);
+                  }}
+                >
+                  {label}
+                </DropdownMenuItem>
+              ))}
+              {isLeadLike && workers.length > 0 ? (
+                <DropdownMenuItem onClick={() => setBroadcastOpen(true)}>
+                  {gt("Send to workers")}
+                </DropdownMenuItem>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <p className="truncate pl-3.5 text-2xs text-muted-foreground">{modelLabel}</p>
       </div>
 
       {broadcastOpen ? (
@@ -312,7 +342,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         </div>
       ) : null}
 
-      <div className="relative min-h-0 flex-1">
+      <div className={cn("relative min-h-0", lod === "interactive" ? "flex-1" : "shrink-0")}>
         {lod === "interactive" ? (
           <AgentCanvasSession
             environmentId={thread.environmentId}
@@ -322,12 +352,12 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         ) : (
           <button
             type="button"
-            className="flex h-full w-full flex-col gap-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="flex w-full flex-col gap-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             onClick={data.onFocus}
           >
-            <div className="min-h-0 flex-1 overflow-hidden bg-muted/25 px-3 py-2.5">
-              <div className="font-mono text-2xs leading-relaxed text-muted-foreground">
-                {lines.slice(0, 5).map((line) => (
+            <div className="overflow-hidden bg-muted/25 px-3 py-1.5">
+              <div className="font-mono text-2xs leading-snug text-muted-foreground">
+                {lines.slice(0, 4).map((line) => (
                   <p key={line} className="truncate text-foreground/80">
                     <span className="mr-2 text-muted-foreground/70 select-none">›</span>
                     {line}
@@ -335,7 +365,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
                 ))}
               </div>
             </div>
-            <div className="flex h-7 shrink-0 items-center gap-2 border-t border-border/50 px-3 text-2xs text-muted-foreground">
+            <div className="flex h-6 shrink-0 items-center gap-2 border-t border-border/50 px-3 text-2xs text-muted-foreground">
+              <RolePill role={data.role} />
               <span className="truncate">{status}</span>
               {relativeLabel ? <span className="truncate">{relativeLabel}</span> : null}
               {stepsLabel ? (

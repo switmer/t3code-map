@@ -15,12 +15,14 @@ import {
 
 export type AgentCanvasLod = "interactive" | "preview" | "chip";
 
-const NODE_GAP_X = 112;
-const NODE_GAP_Y = 96;
+const NODE_GAP_X = 96;
+const NODE_GAP_Y = 72;
 const COLUMNS = 2;
-const LEAD_TO_WORKER_GAP_X = 120;
-const WORKER_STACK_GAP_Y = 64;
-const DEFAULT_WORKER_NODE_SIZE = { width: 360, height: 300 } as const;
+const LEAD_TO_WORKER_GAP_X = 104;
+const WORKER_STACK_GAP_Y = 40;
+const DEFAULT_WORKER_NODE_SIZE = { width: 320, height: 110 } as const;
+/** Nodes parked farther than this are ignored by fit-view / minimap framing. */
+const AGENT_CANVAS_SCENE_BOUND = 2800;
 
 export function agentFlowId(threadKey: string): string {
   return `agent:${threadKey}`;
@@ -178,6 +180,22 @@ export function createNoteId(): string {
   return `n_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Lead fan-out source handle ids (top → bottom along the right edge). */
+export const LEAD_SOURCE_HANDLES = ["out-0", "out-1", "out-2"] as const;
+
+export function leadSourceHandleForIndex(index: number): string {
+  return LEAD_SOURCE_HANDLES[Math.min(Math.max(index, 0), LEAD_SOURCE_HANDLES.length - 1)]!;
+}
+
+export function isInCanvasScene(position: { readonly x: number; readonly y: number }): boolean {
+  return (
+    position.x > -AGENT_CANVAS_SCENE_BOUND &&
+    position.y > -AGENT_CANVAS_SCENE_BOUND &&
+    position.x < AGENT_CANVAS_SCENE_BOUND &&
+    position.y < AGENT_CANVAS_SCENE_BOUND
+  );
+}
+
 export type AgentCanvasPreviewKind = "goal" | "completed" | "running" | "titled" | "empty";
 
 /** Chooses which preview copy a canvas card should show. */
@@ -203,6 +221,7 @@ export type AgentCanvasShotDemoState = {
   readonly lines?: ReadonlyArray<string>;
   readonly modelLabel?: string;
   readonly stepsLabel?: string;
+  readonly title?: string;
 };
 
 export function readShotDemo(threadKey: string): AgentCanvasShotDemoState | null {
