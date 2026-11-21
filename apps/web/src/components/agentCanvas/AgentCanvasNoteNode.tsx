@@ -1,6 +1,6 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useGT } from "gt-react";
-import { StickyNoteIcon, Trash2Icon } from "lucide-react";
+import { Trash2Icon } from "lucide-react";
 import { memo, useState } from "react";
 
 import { useAgentCanvasStore } from "../../agentCanvasStore";
@@ -32,55 +32,40 @@ export const AgentCanvasNoteNode = memo(function AgentCanvasNoteNode({
   return (
     <div
       className={cn(
-        "group relative flex h-full w-full flex-col overflow-hidden rounded-xl border",
-        "border-warning/40 bg-warning-surface text-foreground",
-        "agent-canvas-note-shadow",
-        selected && "ring-2 ring-inset ring-primary/45",
+        "agent-canvas-sticky group relative flex h-full w-full flex-col overflow-hidden rounded-lg",
+        selected && "ring-2 ring-inset ring-primary/35",
       )}
       data-agent-canvas-note={data.noteId}
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-warning/12 to-transparent"
-      />
       <NodeResizer
-        minWidth={160}
-        minHeight={120}
-        maxWidth={640}
-        maxHeight={640}
+        minWidth={150}
+        minHeight={100}
+        maxWidth={480}
+        maxHeight={480}
         isVisible={selected}
-        lineClassName="!border-primary/40"
-        handleClassName="!size-2.5 !rounded-sm !border-primary !bg-background"
+        lineClassName="!border-primary/35"
+        handleClassName="!size-1.5 !rounded-xs !border-primary !bg-background"
       />
-      <Handle
-        type="target"
-        position={Position.Left}
-        id="in"
-        className="!size-2.5 !border-2 !border-background !bg-warning"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        id="out"
-        className="!size-2.5 !border-2 !border-background !bg-warning"
-      />
+      <Handle type="target" position={Position.Left} id="in" className="!bg-warning/80" />
+      <Handle type="source" position={Position.Right} id="out" className="!bg-warning/80" />
 
-      <div className="relative flex h-9 shrink-0 items-center gap-1.5 border-b border-warning/20 px-2.5">
-        <StickyNoteIcon aria-hidden className="size-3.5 text-warning-foreground" />
-        <span className="min-w-0 flex-1 truncate text-2xs font-semibold tracking-wide text-warning-foreground/85 uppercase">
+      <div className="flex h-6 shrink-0 items-center gap-1 px-2.5 pt-1">
+        <span className="min-w-0 flex-1 truncate text-2xs font-medium tracking-tight text-muted-foreground/80">
           {gt("Note")}
         </span>
-        <Button
-          size="icon-micro"
-          variant="ghost-muted"
-          aria-label={gt("Delete note")}
-          onClick={() => {
-            pushHistory();
-            removeNote(data.noteId);
-          }}
-        >
-          <Trash2Icon className="size-3" />
-        </Button>
+        <span className="opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+          <Button
+            size="icon-micro"
+            variant="ghost-muted"
+            aria-label={gt("Delete note")}
+            onClick={() => {
+              pushHistory();
+              removeNote(data.noteId);
+            }}
+          >
+            <Trash2Icon className="size-3" />
+          </Button>
+        </span>
       </div>
       <textarea
         value={draft}
@@ -93,8 +78,8 @@ export const AgentCanvasNoteNode = memo(function AgentCanvasNoteNode({
         onPointerDown={(event) => event.stopPropagation()}
         placeholder={gt("Write a note…")}
         className={cn(
-          "nodrag nopan nowheel relative min-h-0 flex-1 resize-none bg-transparent px-3 py-2.5",
-          "text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/70",
+          "nodrag nopan nowheel min-h-0 flex-1 resize-none bg-transparent px-2.5 pb-2.5",
+          "text-sm leading-relaxed text-foreground/90 outline-none placeholder:text-muted-foreground/55",
           "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         )}
         aria-label={gt("Sticky note text")}

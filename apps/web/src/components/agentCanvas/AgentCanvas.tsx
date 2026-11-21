@@ -4,7 +4,6 @@ import {
   Background,
   BackgroundVariant,
   ConnectionMode,
-  Controls,
   MarkerType,
   MiniMap,
   Panel,
@@ -22,12 +21,15 @@ import {
 import { useNavigate } from "@tanstack/react-router";
 import { useGT } from "gt-react";
 import {
+  HandIcon,
   KeyboardIcon,
-  LayoutGridIcon,
+  MousePointer2Icon,
   Redo2Icon,
   SquarePenIcon,
   StickyNoteIcon,
   Undo2Icon,
+  WaypointsIcon,
+  XIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import "@xyflow/react/dist/style.css";
@@ -57,12 +59,14 @@ import {
   agentFlowId,
   createNoteId,
   defaultNotePlacement,
+  defaultWorkerLayoutForLead,
   isNodeOnScreen,
   newCanvasEdgeId,
   noteFlowId,
   parseAgentFlowId,
   parseNoteFlowId,
   resolveAgentNodeLayout,
+  readShotDemo,
   resolveEdgeKind,
   workerKeysForLead,
 } from "./agentCanvas.logic";
@@ -87,9 +91,12 @@ function toFlowEdge(input: { readonly edge: AgentCanvasEdge; readonly animated: 
     animated,
     markerEnd: {
       type: MarkerType.ArrowClosed,
-      width: 16,
-      height: 16,
-      color: edge.kind === "lead" ? "var(--color-primary)" : "var(--color-muted-foreground)",
+      width: 14,
+      height: 14,
+      color:
+        edge.kind === "lead"
+          ? "color-mix(in oklab, var(--color-primary) 75%, transparent)"
+          : "color-mix(in oklab, var(--color-muted-foreground) 55%, transparent)",
     },
     data: { kind: edge.kind },
   };
@@ -97,6 +104,8 @@ function toFlowEdge(input: { readonly edge: AgentCanvasEdge; readonly animated: 
   if (edge.targetHandle) next.targetHandle = edge.targetHandle;
   return next;
 }
+
+type CanvasTool = "select" | "pan";
 
 function toStoreLayout(
   node: Node,
@@ -144,7 +153,6 @@ function AgentCanvasFlow() {
   const setEdges = useAgentCanvasStore((state) => state.setEdges);
   const addStoreEdge = useAgentCanvasStore((state) => state.addEdge);
   const removeSelection = useAgentCanvasStore((state) => state.removeSelection);
-  const resetLayouts = useAgentCanvasStore((state) => state.resetLayouts);
   const setMode = useAgentCanvasStore((state) => state.setMode);
   const pushHistory = useAgentCanvasStore((state) => state.pushHistory);
   const undo = useAgentCanvasStore((state) => state.undo);
@@ -157,6 +165,7 @@ function AgentCanvasFlow() {
   const [surface, setSurface] = useState<HTMLDivElement | null>(null);
   const [viewportSize, setViewportSize] = useState<{ width: number; height: number } | null>(null);
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [tool, setTool] = useState<CanvasTool>("select");
   const historyGesture = useRef(false);
   const hydratedViewport = useRef(false);
 
@@ -189,6 +198,14 @@ function AgentCanvasFlow() {
       if (event.key === "?" || (event.key === "/" && event.shiftKey)) {
         event.preventDefault();
         setShowShortcuts((open) => !open);
+        return;
+      }
+      if (event.key === "v" || event.key === "V") {
+        setTool("select");
+        return;
+      }
+      if (event.key === "h" || event.key === "H") {
+        setTool("pan");
         return;
       }
       if (event.key === "Escape") setShowShortcuts(false);
@@ -292,9 +309,11 @@ function AgentCanvasFlow() {
               scopedThreadKey(scopeThreadRef(candidate.environmentId, candidate.id)) ===
               sourceAgent,
           );
+    const shotTone = sourceAgent === null ? null : readShotDemo(sourceAgent)?.tone;
     const leadAnimated =
       edge.kind === "lead" &&
-      (sourceThread?.runtime?.status === "running" ||
+      (shotTone === "running" ||
+        sourceThread?.runtime?.status === "running" ||
         sourceThread?.latestRun?.status === "running");
     return toFlowEdge({ edge, animated: Boolean(leadAnimated) });
   });
@@ -391,14 +410,37 @@ function AgentCanvasFlow() {
       source: connection.source,
       target: connection.target,
       kind,
-      ...(connection.sourceHandle ? { sourceHandle: connection.sourceHandle } : {}),
-      ...(connection.targetHandle ? { targetHandle: connection.targetHandle } : {}),
+      sourceHandle: connection.sourceHandle ?? "out",
+      targetHandle: connection.targetHandle ?? "in",
     });
     if (kind === "lead" && sourceAgent !== null) {
       const targetAgent = parseAgentFlowId(connection.target);
       if ((agents[sourceAgent]?.role ?? "none") === "none") setAgentRole(sourceAgent, "lead");
       if (targetAgent !== null && (agents[targetAgent]?.role ?? "none") === "none") {
         setAgentRole(targetAgent, "worker");
+      }
+      // Keep workers in a clean column so new connections never stack on top of each other.
+      if (targetAgent !== null) {
+        const leadLayout = agents[sourceAgent] ?? resolveAgentNodeLayout(0, undefined);
+        const existingWorkers = workerKeysForLead(sourceAgent, [
+          ...edges,
+          {
+            id: "pending",
+            source: connection.source,
+            target: connection.target,
+            kind: "lead",
+          },
+        ]);
+        const workerIndex = Math.max(0, existingWorkers.indexOf(targetAgent));
+        const placed = defaultWorkerLayoutForLead(leadLayout, workerIndex);
+        setAgentLayout(targetAgent, {
+          ...(agents[targetAgent] ?? {
+            ...placed,
+            role: "worker" as const,
+          }),
+          ...placed,
+          role: "worker",
+        });
       }
     }
   };
@@ -449,59 +491,20 @@ function AgentCanvasFlow() {
     });
   };
 
+  const zoomPercent = Math.round(view.zoom * 100);
+  const panMode = tool === "pan";
+
   return (
     <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="flex h-12 shrink-0 items-center gap-2.5 border-b border-border bg-card/40 px-3 backdrop-blur-sm">
-        <div className="flex size-7 items-center justify-center rounded-lg border border-border/80 bg-muted/40">
-          <LayoutGridIcon aria-hidden className="size-3.5 text-muted-foreground" />
-        </div>
-        <div className="min-w-0">
-          <h1 className="text-sm font-semibold tracking-tight">{gt("Agent canvas")}</h1>
-          <p className="text-2xs text-muted-foreground">
-            {gt("{count, plural, one {# agent} other {# agents}}", { count: threads.length })}
-            {" · "}
-            {gt("Snap · connect · broadcast")}
-          </p>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button size="xs" variant="outline" onClick={() => void createOnCanvas()}>
-                  <SquarePenIcon />
-                  {gt("New agent")}
-                </Button>
-              }
-            />
-            <TooltipPopup>{gt("Create a new thread and open it on the canvas")}</TooltipPopup>
-          </Tooltip>
-          <Button size="xs" variant="outline" onClick={addNote}>
-            <StickyNoteIcon />
-            {gt("Add note")}
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label={gt("Undo")}
-            disabled={past.length === 0}
-            onClick={undo}
-          >
-            <Undo2Icon />
-          </Button>
-          <Button
-            size="icon-xs"
-            variant="ghost"
-            aria-label={gt("Redo")}
-            disabled={future.length === 0}
-            onClick={redo}
-          >
-            <Redo2Icon />
-          </Button>
-          <Button size="xs" variant="ghost-muted" onClick={resetLayouts}>
-            {gt("Reset layout")}
-          </Button>
+      <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border/70 px-3">
+        <h1 className="text-sm font-medium tracking-tight">{gt("Agent canvas")}</h1>
+        <span className="text-2xs text-muted-foreground">
+          {gt("{count, plural, one {# agent} other {# agents}}", { count: threads.length })}
+        </span>
+        <div className="ml-auto">
           <Button size="xs" variant="ghost" onClick={() => setMode("normal")}>
-            {gt("Exit canvas")}
+            <XIcon className="size-3.5" />
+            {gt("Exit")}
           </Button>
         </div>
       </div>
@@ -530,11 +533,11 @@ function AgentCanvasFlow() {
           minZoom={0.2}
           maxZoom={2.5}
           snapToGrid
-          snapGrid={[16, 16]}
+          snapGrid={[8, 8]}
           connectionMode={ConnectionMode.Loose}
           selectionMode={SelectionMode.Partial}
-          selectionOnDrag
-          panOnDrag={[1, 2]}
+          selectionOnDrag={!panMode}
+          panOnDrag={panMode ? true : [1, 2]}
           panOnScroll
           zoomOnScroll
           zoomOnPinch
@@ -548,23 +551,136 @@ function AgentCanvasFlow() {
           <Background
             id="agent-canvas-dots"
             variant={BackgroundVariant.Dots}
-            gap={20}
-            size={1.1}
-            color="color-mix(in oklab, var(--color-border) 85%, transparent)"
+            gap={24}
+            size={1}
+            color="color-mix(in oklab, var(--color-border) 70%, transparent)"
           />
-          <MiniMap pannable zoomable nodeStrokeWidth={2} className="!bottom-3 !left-3 !m-0" />
-          <Controls
-            showInteractive={false}
-            className="!right-3 !bottom-3 !left-auto !m-0"
-            onFitView={() => {
-              void fitView({ padding: 0.18, duration: 220 }).then(() => {
-                const next = getViewport();
-                setView({ x: next.x, y: next.y, zoom: next.zoom });
-              });
-            }}
+
+          <MiniMap
+            pannable
+            zoomable={false}
+            nodeStrokeWidth={1.5}
+            style={{ width: 140, height: 90 }}
+            className="!right-3 !bottom-14 !left-auto !m-0"
           />
-          <Panel position="top-left" className="m-3!">
-            <div className="flex items-center gap-1 rounded-xl border border-border/80 bg-popover/95 p-0.5 shadow-composer backdrop-blur-md">
+
+          <Panel position="bottom-right" className="m-3!">
+            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-0.5 shadow-composer backdrop-blur-md">
+              <Button
+                size="xs"
+                variant="ghost-muted"
+                aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
+                onClick={() => {
+                  void fitView({ padding: 0.22, duration: 220 }).then(() => {
+                    const next = getViewport();
+                    setView({ x: next.x, y: next.y, zoom: next.zoom });
+                  });
+                }}
+              >
+                <span className="min-w-10 text-center tabular-nums">{zoomPercent}%</span>
+              </Button>
+            </div>
+          </Panel>
+
+          <Panel position="bottom-center" className="mb-4!">
+            <div className="flex items-center gap-0.5 rounded-full border border-border bg-popover/95 p-1 shadow-composer backdrop-blur-md">
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant={tool === "select" ? "secondary" : "ghost"}
+                      aria-label={gt("Select")}
+                      aria-pressed={tool === "select"}
+                      onClick={() => setTool("select")}
+                    />
+                  }
+                >
+                  <MousePointer2Icon />
+                </TooltipTrigger>
+                <TooltipPopup>{gt("Select")}</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant={tool === "pan" ? "secondary" : "ghost"}
+                      aria-label={gt("Pan")}
+                      aria-pressed={tool === "pan"}
+                      onClick={() => setTool("pan")}
+                    />
+                  }
+                >
+                  <HandIcon />
+                </TooltipTrigger>
+                <TooltipPopup>{gt("Pan")}</TooltipPopup>
+              </Tooltip>
+              <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={gt("New agent")}
+                      onClick={() => void createOnCanvas()}
+                    />
+                  }
+                >
+                  <SquarePenIcon />
+                </TooltipTrigger>
+                <TooltipPopup>{gt("New agent")}</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={gt("Add note")}
+                      onClick={addNote}
+                    />
+                  }
+                >
+                  <StickyNoteIcon />
+                </TooltipTrigger>
+                <TooltipPopup>{gt("Add note")}</TooltipPopup>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label={gt("Connect agents")}
+                      disabled
+                    />
+                  }
+                >
+                  <WaypointsIcon />
+                </TooltipTrigger>
+                <TooltipPopup>{gt("Drag a handle to connect")}</TooltipPopup>
+              </Tooltip>
+              <span className="mx-0.5 h-4 w-px bg-border" aria-hidden />
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={gt("Undo")}
+                disabled={past.length === 0}
+                onClick={undo}
+              >
+                <Undo2Icon />
+              </Button>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                aria-label={gt("Redo")}
+                disabled={future.length === 0}
+                onClick={redo}
+              >
+                <Redo2Icon />
+              </Button>
               <Button
                 size="icon-xs"
                 variant={showShortcuts ? "secondary" : "ghost"}
@@ -574,61 +690,43 @@ function AgentCanvasFlow() {
               >
                 <KeyboardIcon />
               </Button>
-              <span className="pr-2 text-2xs text-muted-foreground">{gt("Press ?")}</span>
             </div>
-            {showShortcuts ? (
-              <div className="mt-2 max-w-xs rounded-xl border border-border bg-popover/95 p-3 text-2xs leading-relaxed text-muted-foreground shadow-composer backdrop-blur-md">
-                <p className="mb-1.5 font-medium text-foreground">{gt("Shortcuts")}</p>
+          </Panel>
+
+          {showShortcuts ? (
+            <Panel position="bottom-center" className="mb-16!">
+              <div className="max-w-sm rounded-xl border border-border bg-popover/95 p-3 text-2xs leading-relaxed text-muted-foreground shadow-composer backdrop-blur-md">
+                <p className="mb-1.5 text-xs font-medium text-foreground">{gt("Shortcuts")}</p>
                 <ul className="space-y-1">
-                  <li>{gt("Drag empty space or middle-click to pan")}</li>
-                  <li>{gt("Scroll or pinch to zoom toward the cursor")}</li>
+                  <li>{gt("V selects · H pans · scroll zooms to the cursor")}</li>
+                  <li>{gt("Nodes snap to an 8px grid while dragging")}</li>
                   <li>{gt("Shift-click or Shift-drag to multi-select")}</li>
                   <li>{gt("Delete / Backspace removes the selection")}</li>
                   <li>{gt("Drag a handle to connect agents or notes")}</li>
-                  <li>{gt("Undo and redo from the toolbar")}</li>
+                  <li>{gt("Leads can broadcast a prompt to connected workers")}</li>
                   <li>{gt("Press ? to toggle this panel")}</li>
                 </ul>
               </div>
-            ) : null}
-          </Panel>
+            </Panel>
+          ) : null}
 
           {threads.length === 0 ? (
-            <Panel position="top-center" className="pointer-events-none mt-14!">
-              <div className="pointer-events-auto flex w-full max-w-md flex-col gap-4 rounded-2xl border border-border bg-card/96 p-6 shadow-composer backdrop-blur-md">
-                <div className="flex items-start gap-3">
-                  <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/40">
-                    <LayoutGridIcon className="size-5 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-sm font-semibold text-foreground">
-                      {gt("Arrange your agents on an infinite canvas")}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {gt(
-                        "Add agents, connect a lead to workers, drop sticky notes, then drag and resize freely.",
-                      )}
-                    </p>
-                  </div>
+            <Panel position="top-center" className="pointer-events-none mt-16!">
+              <div className="pointer-events-auto flex w-full max-w-sm flex-col gap-3 rounded-xl border border-border bg-card/96 p-5 shadow-composer backdrop-blur-md">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium tracking-tight text-foreground">
+                    {gt("Arrange your agents on an infinite canvas")}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {gt(
+                      "Add agents, connect a lead to workers, drop sticky notes, then drag and resize freely.",
+                    )}
+                  </p>
                 </div>
-                <ol className="space-y-2 text-sm text-muted-foreground">
-                  <li className="flex gap-2">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-foreground">
-                      1
-                    </span>
-                    {gt("Create agents with New agent. Each lands as a resizable panel.")}
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-foreground">
-                      2
-                    </span>
-                    {gt("Drag a port from a lead to workers to wire up broadcast.")}
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-2xs font-semibold text-foreground">
-                      3
-                    </span>
-                    {gt("Drop sticky notes for plans, then pan and zoom as you work.")}
-                  </li>
+                <ol className="space-y-1.5 text-xs text-muted-foreground">
+                  <li>1. {gt("Create agents with New agent. Each lands as a resizable panel.")}</li>
+                  <li>2. {gt("Drag a port from a lead to workers to wire up broadcast.")}</li>
+                  <li>3. {gt("Drop sticky notes for plans, then pan and zoom as you work.")}</li>
                 </ol>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button size="sm" onClick={() => void createOnCanvas()}>

@@ -1136,6 +1136,17 @@ html[data-mobile-composer-route-transition="true"]::view-transition-old(t3-mobil
 @utility agent-canvas-status-pulse {
   position: relative;
 }
+@utility agent-canvas-sticky {
+  background: color-mix(in oklab, var(--color-warning-surface) 55%, var(--color-background));
+  border: 1px solid color-mix(in oklab, var(--color-warning) 14%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in oklab, var(--color-foreground) 5%, transparent),
+    0 8px 18px color-mix(in oklab, var(--color-foreground) 4%, transparent);
+}
+.dark .agent-canvas-sticky {
+  background: color-mix(in oklab, var(--color-warning-surface) 48%, var(--color-card));
+  border-color: color-mix(in oklab, var(--color-warning) 18%, transparent);
+}
 
 /* Suppress all transitions during theme changes */
 .no-transitions,

@@ -2,9 +2,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import {
   agentCanvasLod,
+  agentCanvasPreviewKind,
   agentFlowId,
   clampAgentNodeLayout,
   defaultAgentNodeLayout,
+  defaultWorkerLayoutForLead,
   isNodeOnScreen,
   newCanvasEdgeId,
   noteFlowId,
@@ -16,15 +18,15 @@ import {
 } from "./agentCanvas.logic";
 
 describe("agent canvas layout", () => {
-  it("places unsaved agents on a spreading grid with larger defaults", () => {
+  it("places unsaved agents on a spreading grid with roomy gutters", () => {
     expect(defaultAgentNodeLayout(0)).toMatchObject({
       x: 0,
-      y: 0,
-      width: 560,
-      height: 640,
+      y: 80,
+      width: 400,
+      height: 360,
       role: "none",
     });
-    expect(defaultAgentNodeLayout(1).x).toBeGreaterThan(0);
+    expect(defaultAgentNodeLayout(1).x).toBeGreaterThan(defaultAgentNodeLayout(0).width);
     expect(
       resolveAgentNodeLayout(2, {
         x: 10,
@@ -42,6 +44,16 @@ describe("agent canvas layout", () => {
     });
   });
 
+  it("stacks workers in a clean column beside a lead", () => {
+    const lead = { x: 40, y: 80, width: 400, height: 360 };
+    const first = defaultWorkerLayoutForLead(lead, 0);
+    const second = defaultWorkerLayoutForLead(lead, 1);
+    expect(first.x).toBe(lead.x + lead.width + 120);
+    expect(first.y).toBe(lead.y);
+    expect(second.y).toBeGreaterThan(first.y + first.height);
+    expect(second.x).toBe(first.x);
+  });
+
   it("picks lod from focus, visibility, and zoom", () => {
     expect(agentCanvasLod({ focused: true, onScreen: true, zoom: 1 })).toBe("interactive");
     expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 1 })).toBe("preview");
@@ -50,7 +62,7 @@ describe("agent canvas layout", () => {
   });
 
   it("detects off-screen cards and clamps layouts", () => {
-    const layout = { x: 0, y: 0, width: 560, height: 640 };
+    const layout = { x: 0, y: 0, width: 400, height: 360 };
     expect(isNodeOnScreen(layout, { x: 0, y: 0, zoom: 1 }, { width: 800, height: 600 })).toBe(true);
     expect(
       isNodeOnScreen(layout, { x: -2000, y: -2000, zoom: 1 }, { width: 800, height: 600 }),
@@ -58,12 +70,12 @@ describe("agent canvas layout", () => {
     expect(
       clampAgentNodeLayout({ x: -4, y: 8, width: 100, height: 50, role: "none" }),
     ).toMatchObject({
-      width: 320,
-      height: 240,
+      width: 300,
+      height: 220,
     });
   });
 
-  it("builds lead edges and worker rollups", () => {
+  it("builds lead edges, worker rollups, and preview kinds", () => {
     expect(agentFlowId("env:a")).toBe("agent:env:a");
     expect(parseAgentFlowId("agent:env:a")).toBe("env:a");
     expect(noteFlowId("n1")).toBe("note:n1");
@@ -87,5 +99,21 @@ describe("agent canvas layout", () => {
         },
       ]),
     ).toEqual(["worker-1"]);
+    expect(
+      agentCanvasPreviewKind({
+        goalObjective: "Ship auth",
+        title: "Lead",
+        visibleItemCount: 0,
+        latestRunStatus: null,
+      }),
+    ).toBe("goal");
+    expect(
+      agentCanvasPreviewKind({
+        goalObjective: null,
+        title: "Worker",
+        visibleItemCount: 3,
+        latestRunStatus: "completed",
+      }),
+    ).toBe("completed");
   });
 });
