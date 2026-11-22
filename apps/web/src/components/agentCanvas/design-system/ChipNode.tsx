@@ -8,11 +8,11 @@ import { StatusDot } from "./StatusDot";
 
 /**
  * Preferred on-screen chip size (counter-scaled so text stays readable at 20–40% zoom).
- * Clamped to the node's layout footprint so chips never overlap neighbors.
+ * ~320px fits ~18–22 chars of `ac-font-sm` plus status/attention chrome.
  */
-export const AGENT_CANVAS_CHIP_SCREEN = { width: 200, height: 36 } as const;
+export const AGENT_CANVAS_CHIP_SCREEN = { width: 320, height: 44 } as const;
 
-/** Flow-space size + on-screen size for a chip that must stay inside `layout`. */
+/** Flow-space size + on-screen size for a chip at the current zoom. */
 export function chipSizeForLayout(
   zoom: number,
   layout: { readonly width: number; readonly height: number },
@@ -23,10 +23,14 @@ export function chipSizeForLayout(
   readonly screenHeight: number;
 } {
   const z = Math.max(0.15, Math.min(zoom, 1));
-  // Cap chip to ~72% of the layout footprint so lead→worker connectors have a
-  // clear horizontal run inside the node box (not only the inter-card gap).
-  const screenWidth = Math.min(AGENT_CANVAS_CHIP_SCREEN.width, layout.width * z * 0.72);
-  const screenHeight = Math.min(AGENT_CANVAS_CHIP_SCREEN.height, layout.height * z * 0.72);
+  // Prefer the readable ~18–22 char chip. Only shrink for truly tiny footprints (notes).
+  const tiny = layout.width < 220 || layout.height < 100;
+  const screenWidth = tiny
+    ? Math.min(AGENT_CANVAS_CHIP_SCREEN.width, Math.max(layout.width * z, 96))
+    : AGENT_CANVAS_CHIP_SCREEN.width;
+  const screenHeight = tiny
+    ? Math.min(AGENT_CANVAS_CHIP_SCREEN.height, Math.max(layout.height * z, 28))
+    : AGENT_CANVAS_CHIP_SCREEN.height;
   return {
     flowWidth: screenWidth / z,
     flowHeight: screenHeight / z,
@@ -50,6 +54,52 @@ type ChipNodeProps = {
   readonly onClick?: () => void;
   readonly trailing?: ReactNode;
 };
+
+function ChipChrome({
+  statusTone,
+  statusLabel,
+  title,
+  showAttention,
+  trailing,
+  style,
+}: {
+  readonly statusTone: AcStatusTone;
+  readonly statusLabel?: string;
+  readonly title: string;
+  readonly showAttention: boolean;
+  readonly trailing?: ReactNode;
+  readonly style?: CSSProperties;
+}) {
+  const attentionVariant =
+    statusTone === "failed" ? "failed" : statusTone === "done" ? "done" : "needs-you";
+  const attentionLabel =
+    statusTone === "failed" ? "Failed" : statusTone === "done" ? "Done" : "Needs you";
+  return (
+    <div
+      className={cn(
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2.5 shadow-composer",
+        statusTone === "failed" && "border-destructive/45",
+        statusTone === "waiting" && "border-warning/45",
+        statusTone === "running" && "border-success/40",
+      )}
+      style={style}
+    >
+      <StatusDot tone={statusTone} />
+      <span className="min-w-0 flex-1 truncate text-[length:var(--ac-font-sm)] font-medium tracking-tight text-foreground">
+        {title}
+      </span>
+      {statusLabel && !showAttention ? (
+        <span className="max-w-16 shrink-0 truncate text-[length:var(--ac-font-xs)] font-medium text-muted-foreground">
+          {statusLabel}
+        </span>
+      ) : null}
+      {showAttention ? (
+        <AttentionBadge compact variant={attentionVariant} label={attentionLabel} />
+      ) : null}
+      {trailing}
+    </div>
+  );
+}
 
 /**
  * LOD chip: flow node should be sized to `screen / zoom` so after React Flow
@@ -76,10 +126,6 @@ export function ChipNode({
     transform: `scale(${inv})`,
     transformOrigin: "top left",
   };
-  const attentionVariant =
-    statusTone === "failed" ? "failed" : statusTone === "done" ? "done" : "needs-you";
-  const attentionLabel =
-    statusTone === "failed" ? "Failed" : statusTone === "done" ? "Done" : "Needs you";
 
   return (
     <button
@@ -95,68 +141,53 @@ export function ChipNode({
         className,
       )}
     >
-      <div
-        className={cn(
-          "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2 shadow-composer",
-          statusTone === "failed" && "border-destructive/45",
-          statusTone === "waiting" && "border-warning/45",
-          statusTone === "running" && "border-success/40",
-        )}
+      <ChipChrome
+        statusTone={statusTone}
+        {...(statusLabel !== undefined ? { statusLabel } : {})}
+        title={title}
+        showAttention={showAttention}
+        {...(trailing !== undefined ? { trailing } : {})}
         style={innerStyle}
-      >
-        <StatusDot tone={statusTone} />
-        <span className="min-w-0 flex-1 truncate text-[length:var(--ac-font-sm)] font-medium tracking-tight text-foreground">
-          {title}
-        </span>
-        {statusLabel && !showAttention ? (
-          <span className="max-w-16 shrink-0 truncate text-[length:var(--ac-font-xs)] font-medium text-muted-foreground">
-            {statusLabel}
-          </span>
-        ) : null}
-        {showAttention ? (
-          <AttentionBadge compact variant={attentionVariant} label={attentionLabel} />
-        ) : null}
-        {trailing}
-      </div>
+      />
     </button>
   );
 }
 
 /**
- * Gallery specimen: simulates React Flow zoom so counter-scale reads at true
- * on-screen size, each specimen in its own labeled cell (never overlapping).
+ * Gallery specimen: on-screen chip at 1:1 inside a padded cell (no nested RF
+ * counter-scale — that clipped the chrome in the cell).
  */
 export function ChipNodeSpecimen({
   caption,
   zoom,
   ...props
 }: ChipNodeProps & { readonly caption: string; readonly zoom: number }) {
-  const z = Math.max(0.15, Math.min(zoom, 1));
+  void zoom;
   const screenW = props.screenWidth ?? AGENT_CANVAS_CHIP_SCREEN.width;
   const screenH = props.screenHeight ?? AGENT_CANVAS_CHIP_SCREEN.height;
-  const flowW = screenW / z;
-  const flowH = screenH / z;
+  const pad = 16;
+  const statusTone = props.statusTone ?? "idle";
   return (
     <div className="flex min-w-0 max-w-full flex-col gap-1.5">
       <span className="text-[length:var(--ac-font-xs)] font-medium text-muted-foreground">
         {caption}
       </span>
       <div
-        className="relative max-w-full overflow-hidden rounded-md border border-border/60 bg-muted/20 p-2"
-        style={{ width: screenW + 16, maxWidth: "100%" }}
+        className="box-border overflow-visible rounded-md border border-border/60 bg-muted/20"
+        style={{
+          width: screenW + pad * 2,
+          maxWidth: "100%",
+          padding: pad,
+        }}
       >
-        <div className="overflow-hidden" style={{ width: screenW, height: screenH }}>
-          <div
-            style={{
-              width: flowW,
-              height: flowH,
-              transform: `scale(${z})`,
-              transformOrigin: "top left",
-            }}
-          >
-            <ChipNode {...props} zoom={z} screenWidth={screenW} screenHeight={screenH} />
-          </div>
-        </div>
+        <ChipChrome
+          statusTone={statusTone}
+          {...(props.statusLabel !== undefined ? { statusLabel: props.statusLabel } : {})}
+          title={props.title}
+          showAttention={Boolean(props.showAttention)}
+          {...(props.trailing !== undefined ? { trailing: props.trailing } : {})}
+          style={{ width: screenW, minHeight: screenH, height: "auto" }}
+        />
       </div>
     </div>
   );

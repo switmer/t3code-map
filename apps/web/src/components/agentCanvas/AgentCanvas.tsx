@@ -89,6 +89,7 @@ import {
   computeFitViewport,
   computeNarrowLeadFit,
   createNoteId,
+  narrowLeadFlowWidth,
   defaultNotePlacement,
   defaultWorkerLayoutForLead,
   findFreeAgentSlot,
@@ -369,7 +370,8 @@ function AgentCanvasFlow() {
     );
     const leadLayout = focusLayouts[0] ?? sceneLayouts[0]?.fit;
     if (narrow && leadLayout) {
-      const cleared = computeNarrowLeadFit(leadLayout, viewportSize);
+      const fit = computeNarrowLeadFit(leadLayout, viewportSize);
+      const cleared = { x: fit.x, y: fit.y, zoom: fit.zoom };
       void setViewport(cleared, { duration: 0 }).then(() => {
         setView(cleared);
       });
@@ -566,6 +568,10 @@ function AgentCanvasFlow() {
     );
   };
 
+  const narrowViewport = viewportSize !== null && viewportSize.width < AGENT_CANVAS_NARROW_VIEWPORT;
+  const narrowLeadCap =
+    narrowViewport && viewportSize !== null ? narrowLeadFlowWidth(viewportSize.width) : null;
+
   const flowNodes: CanvasFlowNode[] = [
     ...threads.map((thread, index) => {
       const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
@@ -579,7 +585,11 @@ function AgentCanvasFlow() {
       // Chip LOD: size the RF node to the chip footprint so Left/Right handles
       // sit on the visible chrome (layout-sized nodes left edges floating above chips).
       const chip = lod === "chip" ? chipSizeForLayout(liveZoom, layout) : null;
-      const width = chip ? chip.flowWidth : layout.width;
+      const leadNarrowW =
+        narrowLeadCap !== null && (layout.role === "lead" || layout.role === "coordinator")
+          ? Math.min(layout.width, narrowLeadCap)
+          : null;
+      const width = chip ? chip.flowWidth : (leadNarrowW ?? layout.width);
       const height = chip ? chip.flowHeight : lod === "preview" ? undefined : layout.height;
       return {
         id: agentFlowId(threadKey),
@@ -739,13 +749,16 @@ function AgentCanvasFlow() {
       if (agentKey !== null) {
         const previous = agents[agentKey] ?? resolveAgentNodeLayout(0, undefined);
         const layout = toStoreLayout(node, previous);
-        // Chip/preview LOD temporarily sizes the RF node for handle geometry —
+        // Chip/preview LOD and narrow lead clamp temporarily size the RF node —
         // never persist those ephemeral dimensions into the layout store.
         const lod = node.data?.lod;
-        const nextLayout =
-          lod === "chip" || lod === "preview"
-            ? { ...layout, width: previous.width, height: previous.height }
-            : layout;
+        const preserveSize =
+          lod === "chip" ||
+          lod === "preview" ||
+          ((previous.role === "lead" || previous.role === "coordinator") && narrowViewport);
+        const nextLayout = preserveSize
+          ? { ...layout, width: previous.width, height: previous.height }
+          : layout;
         if (
           previous.x === nextLayout.x &&
           previous.y === nextLayout.y &&
@@ -1290,7 +1303,7 @@ function AgentCanvasFlow() {
                   const narrow = size.width < AGENT_CANVAS_NARROW_VIEWPORT;
                   const focusLayouts = preferredFitLayouts(agentLayouts, edges, narrow ? 0 : 3);
                   const leadLayout = focusLayouts[0] ?? agentLayouts[0];
-                  const cleared =
+                  const fit =
                     narrow && leadLayout
                       ? computeNarrowLeadFit(leadLayout, size)
                       : computeFitViewport(
@@ -1301,6 +1314,7 @@ function AgentCanvasFlow() {
                             maxZoom: 1,
                           },
                         );
+                  const cleared = { x: fit.x, y: fit.y, zoom: fit.zoom };
                   void setViewport(cleared, { duration: 220 }).then(() => {
                     setView(cleared);
                   });

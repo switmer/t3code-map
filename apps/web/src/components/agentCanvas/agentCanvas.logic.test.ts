@@ -62,7 +62,8 @@ describe("agent canvas layout", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
     const first = defaultWorkerLayoutForLead(lead, 0, 2);
     const second = defaultWorkerLayoutForLead(lead, 1, 2);
-    expect(first.x).toBe(lead.x + lead.width + 240);
+    // Clears chip-LOD footprint (320 / 0.28) plus gap, not just the card width.
+    expect(first.x).toBe(lead.x + Math.max(lead.width, 320 / 0.28) + 80);
     expect(second.x).toBe(first.x);
     expect(second.y).toBeGreaterThan(first.y + first.height);
   });
@@ -214,28 +215,29 @@ describe("agent canvas layout", () => {
     expect(isSceneClearOfChrome(preferred, view, viewport)).toBe(true);
   });
 
-  it("clamps chip size to the layout footprint so chips cannot overlap", () => {
-    const tight = chipSizeForLayout(0.28, { width: 480, height: 260 });
-    expect(tight.flowWidth).toBeLessThanOrEqual(480);
-    expect(tight.flowHeight).toBeLessThanOrEqual(260);
-    expect(tight.screenWidth).toBeLessThanOrEqual(200);
-    // Wide layouts still leave connector room (≤72% of footprint) before the 200px cap.
-    const wide = chipSizeForLayout(0.28, { width: 900, height: 700 });
-    expect(wide.screenWidth).toBeCloseTo(Math.min(200, 900 * 0.28 * 0.72), 5);
-    expect(wide.flowWidth).toBeCloseTo(wide.screenWidth / 0.28, 5);
-    expect(wide.flowWidth).toBeLessThanOrEqual(900);
+  it("keeps chip on-screen width wide enough for ~18–22 chars", () => {
+    const agent = chipSizeForLayout(0.28, { width: 400, height: 340 });
+    expect(agent.screenWidth).toBe(320);
+    expect(agent.flowWidth).toBeCloseTo(320 / 0.28, 5);
+    const note = chipSizeForLayout(0.28, { width: 180, height: 88 });
+    expect(note.screenWidth).toBeLessThan(320);
+    expect(note.screenWidth).toBeGreaterThanOrEqual(96);
   });
 
-  it("frames the lead card fully on a narrow phone viewport", () => {
+  it("frames the lead card fully on a narrow phone viewport at readable zoom", () => {
     const lead = { x: 80, y: 96, width: 640, height: 680 };
     const viewport = { width: 430, height: 900 };
     const view = computeNarrowLeadFit(lead, viewport);
     const left = lead.x * view.zoom + view.x;
-    const right = (lead.x + lead.width) * view.zoom + view.x;
+    const right = (lead.x + view.leadWidth) * view.zoom + view.x;
     expect(left).toBeGreaterThanOrEqual(12 - 0.5);
     expect(right).toBeLessThanOrEqual(viewport.width - 12 + 0.5);
     expect(right - left).toBeLessThanOrEqual(viewport.width - 24 + 0.5);
-    expect(view.zoom).toBeLessThan(0.85);
+    expect(view.zoom).toBeGreaterThanOrEqual(0.85);
+    expect(view.zoom).toBeLessThanOrEqual(1);
+    // Compact body is 12px CSS → on-screen ≥12px at this zoom.
+    expect(12 * view.zoom).toBeGreaterThanOrEqual(12 - 0.05);
+    expect(view.leadWidth).toBeLessThanOrEqual(lead.width);
   });
 
   it("spreads lead handles evenly for fan edges", () => {

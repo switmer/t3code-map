@@ -21,8 +21,8 @@ export const AGENT_CANVAS_INTERACTIVE_ZOOM = 0.55;
 const NODE_GAP_X = 72;
 const NODE_GAP_Y = 56;
 const COLUMNS = 3;
-/** Wide enough that chip LOD (≈28%) still shows a clear lead→worker connector. */
-const LEAD_TO_WORKER_GAP_X = 240;
+/** Extra gap beyond the lead card / chip footprint so chip-LOD connectors stay clear. */
+const LEAD_TO_WORKER_GAP_X = 80;
 const WORKER_STACK_GAP_Y = 24;
 const WORKER_GRID_GAP_X = 40;
 const WORKER_GRID_GAP_Y = 24;
@@ -57,6 +57,17 @@ export const AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM = 0.85;
 /** Viewport width below which we frame only the lead card. */
 export const AGENT_CANVAS_NARROW_VIEWPORT = 720;
 
+/**
+ * Narrow phones: keep canvas body (≥12px CSS in compact mode) at ≥12px on-screen.
+ * That requires zoom ≥ 1; still allow a readable band down to 0.85 if height is tight.
+ */
+const AGENT_CANVAS_NARROW_MIN_ZOOM = 0.85;
+const AGENT_CANVAS_NARROW_BODY_CSS_PX = 12;
+const AGENT_CANVAS_NARROW_MIN_BODY_SCREEN_PX = 12;
+
+/** Preferred chip zoom used when reserving lead→worker clearance for chip footprints. */
+const AGENT_CANVAS_CHIP_CLEARANCE_ZOOM = 0.28;
+
 export function agentFlowId(threadKey: string): string {
   return `agent:${threadKey}`;
 }
@@ -87,6 +98,18 @@ export function defaultAgentNodeLayout(index: number): AgentCanvasNodeLayout {
 }
 
 /**
+ * Lead→worker start X: clear both the card width and the chip-LOD footprint
+ * (~280px on-screen / 0.28 ≈ 1000 flow) so chips never overlap.
+ */
+function leadWorkerStartX(
+  lead: Pick<AgentCanvasNodeLayout, "x" | "width">,
+  chipScreenWidth: number,
+): number {
+  const chipFlow = chipScreenWidth / AGENT_CANVAS_CHIP_CLEARANCE_ZOOM;
+  return lead.x + Math.max(lead.width, chipFlow) + LEAD_TO_WORKER_GAP_X;
+}
+
+/**
  * Place workers beside a lead. 1–2 workers stack vertically; 3+ use a 2-column
  * grid so the cluster still fits above the floating toolbar at interactive zoom.
  */
@@ -94,10 +117,11 @@ export function defaultWorkerLayoutForLead(
   lead: Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height">,
   workerIndex: number,
   workerCount = 1,
+  chipScreenWidth = 320,
 ): Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height"> {
   const w = DEFAULT_WORKER_NODE_SIZE.width;
   const h = DEFAULT_WORKER_NODE_SIZE.height;
-  const startX = lead.x + lead.width + LEAD_TO_WORKER_GAP_X;
+  const startX = leadWorkerStartX(lead, chipScreenWidth);
   const count = Math.max(1, workerCount);
 
   if (count <= 2) {
@@ -317,10 +341,26 @@ export function preferredFitLayouts(
     .slice(0, Math.min(layouts.length, maxWorkers + 1));
 }
 
+export type NarrowLeadFit = AgentCanvasView & {
+  /** Flow-space width the lead should render at so it fills the guttered viewport. */
+  readonly leadWidth: number;
+};
+
+/** Flow-space lead width that fills the guttered narrow viewport at the preferred zoom. */
+export function narrowLeadFlowWidth(viewportWidth: number, gutter = 12): number {
+  const availW = Math.max(1, viewportWidth - gutter * 2);
+  const textZoom = Math.min(
+    1,
+    AGENT_CANVAS_NARROW_MIN_BODY_SCREEN_PX / AGENT_CANVAS_NARROW_BODY_CSS_PX,
+  );
+  const zoom = Math.max(AGENT_CANVAS_NARROW_MIN_ZOOM, textZoom);
+  return availW / zoom;
+}
+
 /**
- * Narrow viewport fit: frame the lead card fully inside 12px gutters, centered
- * horizontally. Zoom shrinks the card so its on-screen width equals the
- * guttered viewport (workers stay off-screen and reachable by pan).
+ * Narrow viewport fit: prefer zoom where compact body text stays ≥12px on-screen
+ * (≈85–100%). Clamp the lead card’s flow width so it fills the guttered viewport
+ * at that zoom (workers stay off-screen and reachable by pan).
  */
 export function computeNarrowLeadFit(
   lead: {
@@ -331,7 +371,7 @@ export function computeNarrowLeadFit(
   },
   viewport: { readonly width: number; readonly height: number },
   gutter = 12,
-): AgentCanvasView {
+): NarrowLeadFit {
   const chrome = {
     top: AGENT_CANVAS_NARROW_FIT_CHROME.top,
     right: gutter,
@@ -340,14 +380,27 @@ export function computeNarrowLeadFit(
   };
   const availW = Math.max(1, viewport.width - chrome.left - chrome.right);
   const availH = Math.max(1, viewport.height - chrome.top - chrome.bottom);
-  // Never floor zoom — a floor would clip the lead on narrow phones.
-  const zoom = Math.min(1, availW / Math.max(1, lead.width), availH / Math.max(1, lead.height));
-  const usedW = lead.width * zoom;
+  const textZoom = Math.min(
+    1,
+    AGENT_CANVAS_NARROW_MIN_BODY_SCREEN_PX / AGENT_CANVAS_NARROW_BODY_CSS_PX,
+  );
+  // Prefer readable text; ease down toward 0.85 only when height is tight.
+  let zoom = Math.max(AGENT_CANVAS_NARROW_MIN_ZOOM, textZoom);
+  const leadWidth = Math.min(lead.width, availW / zoom);
+  const usedHAtZoom = lead.height * zoom;
+  if (usedHAtZoom > availH) {
+    zoom = Math.max(
+      AGENT_CANVAS_NARROW_MIN_ZOOM,
+      Math.min(zoom, availH / Math.max(1, lead.height)),
+    );
+  }
+  const usedW = leadWidth * zoom;
   const usedH = lead.height * zoom;
   return {
     x: chrome.left + (availW - usedW) / 2 - lead.x * zoom,
     y: chrome.top + Math.max(0, (availH - usedH) / 2) - lead.y * zoom,
     zoom,
+    leadWidth,
   };
 }
 
