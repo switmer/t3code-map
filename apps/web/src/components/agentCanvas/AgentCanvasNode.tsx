@@ -48,6 +48,8 @@ export type AgentCanvasAgentFlowNode = Node<
     readonly role: AgentCanvasRole;
     readonly lod: AgentCanvasLod;
     readonly zoom: number;
+    readonly chipScreenWidth?: number;
+    readonly chipScreenHeight?: number;
     readonly focused: boolean;
     readonly workerCount: number;
     readonly needsAttention: boolean;
@@ -212,6 +214,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           statusTone={acTone}
           statusLabel={status}
           zoom={data.zoom}
+          {...(data.chipScreenWidth !== undefined ? { screenWidth: data.chipScreenWidth } : {})}
+          {...(data.chipScreenHeight !== undefined ? { screenHeight: data.chipScreenHeight } : {})}
           role={data.role}
           showAttention={showAttentionBadge}
           onClick={data.onFocus}

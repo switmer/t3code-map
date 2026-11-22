@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
 import {
+  AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
   AGENT_CANVAS_INTERACTIVE_ZOOM,
   agentCanvasLod,
   agentCanvasPreviewKind,
@@ -18,6 +19,7 @@ import {
   noteFlowId,
   parseAgentFlowId,
   parseNoteFlowId,
+  preferredFitLayouts,
   resolveAgentNodeLayout,
   resolveEdgeKind,
   resolveNonOverlappingAgentLayouts,
@@ -26,6 +28,7 @@ import {
   threadNeedsAttention,
   workerKeysForLead,
 } from "./agentCanvas.logic";
+import { chipSizeForLayout } from "./design-system/ChipNode";
 
 describe("agent canvas layout", () => {
   it("places unsaved agents on a spreading grid with roomy gutters", () => {
@@ -147,6 +150,77 @@ describe("agent canvas layout", () => {
     const view = computeFitViewport(layouts, viewport);
     expect(isSceneClearOfChrome(layouts, view, viewport)).toBe(true);
     expect(view.zoom).toBeGreaterThanOrEqual(AGENT_CANVAS_INTERACTIVE_ZOOM);
+  });
+
+  it("prefers lead + workers for readable default fit", () => {
+    expect(AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM).toBe(0.85);
+    const layouts = [
+      {
+        x: 0,
+        y: 0,
+        width: 640,
+        height: 680,
+        role: "lead" as const,
+        threadKey: "lead",
+      },
+      {
+        x: 800,
+        y: 0,
+        width: 360,
+        height: 300,
+        role: "worker" as const,
+        threadKey: "w1",
+      },
+      {
+        x: 800,
+        y: 340,
+        width: 360,
+        height: 300,
+        role: "worker" as const,
+        threadKey: "w2",
+      },
+      {
+        x: 2000,
+        y: 0,
+        width: 360,
+        height: 300,
+        role: "worker" as const,
+        threadKey: "far",
+      },
+    ];
+    const edges = [
+      {
+        id: "e1",
+        source: agentFlowId("lead"),
+        target: agentFlowId("w1"),
+        kind: "lead" as const,
+      },
+      {
+        id: "e2",
+        source: agentFlowId("lead"),
+        target: agentFlowId("w2"),
+        kind: "lead" as const,
+      },
+    ];
+    const preferred = preferredFitLayouts(layouts, edges);
+    expect(preferred.map((entry) => entry.threadKey)).toEqual(["lead", "w1", "w2"]);
+    const viewport = { width: 1512, height: 982 };
+    const view = computeFitViewport(preferred, viewport, {
+      minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
+      maxZoom: 1,
+    });
+    expect(view.zoom).toBeGreaterThanOrEqual(AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM);
+    expect(isSceneClearOfChrome(preferred, view, viewport)).toBe(true);
+  });
+
+  it("clamps chip size to the layout footprint so chips cannot overlap", () => {
+    const tight = chipSizeForLayout(0.28, { width: 480, height: 260 });
+    expect(tight.flowWidth).toBeLessThanOrEqual(480);
+    expect(tight.flowHeight).toBeLessThanOrEqual(260);
+    expect(tight.screenWidth).toBeLessThanOrEqual(200);
+    const wide = chipSizeForLayout(0.28, { width: 900, height: 700 });
+    expect(wide.screenWidth).toBe(200);
+    expect(wide.flowWidth).toBeCloseTo(200 / 0.28, 5);
   });
 
   it("spreads lead handles evenly for fan edges", () => {

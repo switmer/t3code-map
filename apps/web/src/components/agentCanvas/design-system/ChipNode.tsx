@@ -7,10 +7,31 @@ import { AttentionBadge } from "./AttentionBadge";
 import { StatusDot } from "./StatusDot";
 
 /**
- * Screen-space chip size (counter-scaled so it stays readable at 20–40% zoom).
- * Wide enough for a truncated agent name + status + compact attention icon.
+ * Preferred on-screen chip size (counter-scaled so text stays readable at 20–40% zoom).
+ * Clamped to the node's layout footprint so chips never overlap neighbors.
  */
-export const AGENT_CANVAS_CHIP_SCREEN = { width: 220, height: 36 } as const;
+export const AGENT_CANVAS_CHIP_SCREEN = { width: 200, height: 36 } as const;
+
+/** Flow-space size + on-screen size for a chip that must stay inside `layout`. */
+export function chipSizeForLayout(
+  zoom: number,
+  layout: { readonly width: number; readonly height: number },
+): {
+  readonly flowWidth: number;
+  readonly flowHeight: number;
+  readonly screenWidth: number;
+  readonly screenHeight: number;
+} {
+  const z = Math.max(0.15, Math.min(zoom, 1));
+  const screenWidth = Math.min(AGENT_CANVAS_CHIP_SCREEN.width, layout.width * z);
+  const screenHeight = Math.min(AGENT_CANVAS_CHIP_SCREEN.height, layout.height * z);
+  return {
+    flowWidth: screenWidth / z,
+    flowHeight: screenHeight / z,
+    screenWidth,
+    screenHeight,
+  };
+}
 
 type ChipNodeProps = {
   readonly className?: string;
@@ -19,6 +40,9 @@ type ChipNodeProps = {
   readonly title: string;
   /** Current canvas zoom — used to inverse-scale chrome for legibility. */
   readonly zoom?: number;
+  /** On-screen chrome size after clamping to the node footprint. */
+  readonly screenWidth?: number;
+  readonly screenHeight?: number;
   readonly role?: AcRole;
   readonly showAttention?: boolean;
   readonly onClick?: () => void;
@@ -27,7 +51,7 @@ type ChipNodeProps = {
 
 /**
  * LOD chip: flow node should be sized to `screen / zoom` so after React Flow
- * scales the node, the chip stays ~AGENT_CANVAS_CHIP_SCREEN on screen with
+ * scales the node, the chip stays ~screenWidth×screenHeight on screen with
  * unscaled type (inverse scale on the inner chrome).
  */
 export function ChipNode({
@@ -36,6 +60,8 @@ export function ChipNode({
   statusLabel,
   title,
   zoom = 1,
+  screenWidth = AGENT_CANVAS_CHIP_SCREEN.width,
+  screenHeight = AGENT_CANVAS_CHIP_SCREEN.height,
   showAttention = false,
   onClick,
   trailing,
@@ -43,8 +69,8 @@ export function ChipNode({
   const safeZoom = Math.max(0.15, Math.min(zoom, 1));
   const inv = 1 / safeZoom;
   const innerStyle: CSSProperties = {
-    width: AGENT_CANVAS_CHIP_SCREEN.width,
-    height: AGENT_CANVAS_CHIP_SCREEN.height,
+    width: screenWidth,
+    height: screenHeight,
     transform: `scale(${inv})`,
     transformOrigin: "top left",
   };
@@ -91,5 +117,45 @@ export function ChipNode({
         {trailing}
       </div>
     </button>
+  );
+}
+
+/**
+ * Gallery specimen: simulates React Flow zoom so counter-scale reads at true
+ * on-screen size, each specimen in its own labeled cell (never overlapping).
+ */
+export function ChipNodeSpecimen({
+  caption,
+  zoom,
+  ...props
+}: ChipNodeProps & { readonly caption: string; readonly zoom: number }) {
+  const z = Math.max(0.15, Math.min(zoom, 1));
+  const screenW = props.screenWidth ?? AGENT_CANVAS_CHIP_SCREEN.width;
+  const screenH = props.screenHeight ?? AGENT_CANVAS_CHIP_SCREEN.height;
+  const flowW = screenW / z;
+  const flowH = screenH / z;
+  return (
+    <div className="flex min-w-0 max-w-full flex-col gap-1.5">
+      <span className="text-[length:var(--ac-font-xs)] font-medium text-muted-foreground">
+        {caption}
+      </span>
+      <div
+        className="relative max-w-full overflow-hidden rounded-md border border-border/60 bg-muted/20 p-2"
+        style={{ width: screenW + 16, maxWidth: "100%" }}
+      >
+        <div className="overflow-hidden" style={{ width: screenW, height: screenH }}>
+          <div
+            style={{
+              width: flowW,
+              height: flowH,
+              transform: `scale(${z})`,
+              transformOrigin: "top left",
+            }}
+          >
+            <ChipNode {...props} zoom={z} screenWidth={screenW} screenHeight={screenH} />
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

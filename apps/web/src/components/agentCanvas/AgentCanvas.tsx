@@ -81,6 +81,7 @@ import {
   writeViewedAttentionKeys,
 } from "./agentCanvasAttention";
 import {
+  AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
   AGENT_CANVAS_INTERACTIVE_ZOOM,
   agentCanvasLod,
   agentFlowId,
@@ -97,6 +98,7 @@ import {
   noteFlowId,
   parseAgentFlowId,
   parseNoteFlowId,
+  preferredFitLayouts,
   resolveAgentNodeLayout,
   resolveNonOverlappingAgentLayouts,
   readShotDemo,
@@ -107,7 +109,7 @@ import {
 import { AgentCanvasLeadEdge } from "./AgentCanvasLeadEdge";
 import { AgentCanvasNode, type AgentCanvasAgentFlowNode } from "./AgentCanvasNode";
 import { AgentCanvasNoteNode, type AgentCanvasNoteFlowNode } from "./AgentCanvasNoteNode";
-import { AGENT_CANVAS_CHIP_SCREEN } from "./design-system/ChipNode";
+import { chipSizeForLayout } from "./design-system/ChipNode";
 
 type CanvasFlowNode = AgentCanvasAgentFlowNode | AgentCanvasNoteFlowNode;
 
@@ -302,18 +304,33 @@ function AgentCanvasFlow() {
     const sceneLayouts = threads
       .map((thread, index) => {
         const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
+        const layout = resolveAgentNodeLayout(index, agents[threadKey]);
         return {
           threadKey,
-          layout: resolveAgentNodeLayout(index, agents[threadKey]),
+          layout,
+          fit: {
+            x: layout.x,
+            y: layout.y,
+            width: layout.width,
+            height: layout.height,
+            role: layout.role,
+            threadKey,
+          },
         };
       })
       .filter((entry) => isInCanvasScene(entry.layout));
     if (sceneLayouts.length === 0) return;
     framedScene.current = true;
+    const narrow = viewportSize.width < 720;
+    const focusLayouts = preferredFitLayouts(
+      sceneLayouts.map((entry) => entry.fit),
+      edges,
+      narrow ? 0 : 3,
+    );
     if (
-      view.zoom >= AGENT_CANVAS_INTERACTIVE_ZOOM &&
+      view.zoom >= AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM &&
       isSceneClearOfChrome(
-        sceneLayouts.map((entry) => entry.layout),
+        focusLayouts.length > 0 ? focusLayouts : sceneLayouts.map((entry) => entry.layout),
         view,
         viewportSize,
       )
@@ -321,15 +338,15 @@ function AgentCanvasFlow() {
       return;
     }
     const cleared = computeFitViewport(
-      sceneLayouts.map((entry) => entry.layout),
+      focusLayouts.length > 0 ? focusLayouts : sceneLayouts.map((entry) => entry.layout),
       viewportSize,
-      // Allow chip LOD (~28%) so dense scenes center as a readable cluster.
-      { minZoom: 0.28, maxZoom: 1 },
+      // Prefer readable interactive zoom; let distant workers sit off-screen.
+      { minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM, maxZoom: 1 },
     );
     void setViewport(cleared, { duration: 0 }).then(() => {
       setView(cleared);
     });
-  }, [agents, setView, setViewport, storeHydrated, threads, view, viewportSize]);
+  }, [agents, edges, setView, setViewport, storeHydrated, threads, view, viewportSize]);
 
   const threadKeyOf = (thread: (typeof threads)[number]) =>
     scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
@@ -509,11 +526,11 @@ function AgentCanvasFlow() {
       const onScreen = viewportSize === null ? true : isNodeOnScreen(layout, view, viewportSize);
       const lod = agentCanvasLod({ focused, onScreen, zoom: view.zoom });
       const workerCount = workerKeysForLead(threadKey, edges).length;
-      // Chip LOD: flow size = screen size / zoom so inverse-scaled chrome stays readable.
-      const chipFlowW = AGENT_CANVAS_CHIP_SCREEN.width / Math.max(view.zoom, 0.15);
-      const chipFlowH = AGENT_CANVAS_CHIP_SCREEN.height / Math.max(view.zoom, 0.15);
-      const width = lod === "chip" ? chipFlowW : layout.width;
-      const height = lod === "chip" ? chipFlowH : lod === "interactive" ? layout.height : undefined;
+      // Chip LOD: clamp screen size to the layout footprint (top-left anchored).
+      // Never rewrite position — RF would persist it and park agents off-scene.
+      const chip = lod === "chip" ? chipSizeForLayout(view.zoom, layout) : null;
+      const width = chip ? chip.flowWidth : layout.width;
+      const height = chip ? chip.flowHeight : lod === "interactive" ? layout.height : undefined;
       return {
         id: agentFlowId(threadKey),
         type: "agent" as const,
@@ -529,6 +546,12 @@ function AgentCanvasFlow() {
           role: layout.role,
           lod,
           zoom: view.zoom,
+          ...(chip
+            ? {
+                chipScreenWidth: chip.screenWidth,
+                chipScreenHeight: chip.screenHeight,
+              }
+            : {}),
           focused,
           workerCount,
           needsAttention: attentionKeys.includes(threadKey),
@@ -540,19 +563,45 @@ function AgentCanvasFlow() {
         },
       } satisfies AgentCanvasAgentFlowNode;
     }),
-    ...Object.values(notes).map(
-      (note) =>
-        ({
-          id: noteFlowId(note.id),
-          type: "note" as const,
-          position: { x: note.x, y: note.y },
-          width: note.width,
-          height: note.height,
-          hidden: !isInCanvasScene(note),
-          style: { width: note.width, height: note.height },
-          data: { noteId: note.id, text: note.text },
-        }) satisfies AgentCanvasNoteFlowNode,
-    ),
+    ...Object.values(notes).map((note) => {
+      const noteLod = agentCanvasLod({
+        focused: false,
+        onScreen: viewportSize === null ? true : isNodeOnScreen(note, view, viewportSize),
+        zoom: view.zoom,
+      });
+      // Notes sit above the cluster — allow a readable chip wider than the
+      // raw sticky bounds so the first line isn't a 2-character smudge.
+      const chip =
+        noteLod === "chip"
+          ? chipSizeForLayout(view.zoom, {
+              width: Math.max(note.width, 200 / Math.max(view.zoom, 0.15)),
+              height: Math.max(note.height, 36 / Math.max(view.zoom, 0.15)),
+            })
+          : null;
+      const width = chip ? chip.flowWidth : note.width;
+      const height = chip ? chip.flowHeight : note.height;
+      return {
+        id: noteFlowId(note.id),
+        type: "note" as const,
+        position: { x: note.x, y: note.y },
+        width,
+        height,
+        hidden: !isInCanvasScene(note),
+        style: { width, height },
+        data: {
+          noteId: note.id,
+          text: note.text,
+          lod: noteLod,
+          zoom: view.zoom,
+          ...(chip
+            ? {
+                chipScreenWidth: chip.screenWidth,
+                chipScreenHeight: chip.screenHeight,
+              }
+            : {}),
+        },
+      } satisfies AgentCanvasNoteFlowNode;
+    }),
   ];
 
   const leadFanOrder = new Map<string, string[]>();
@@ -1101,7 +1150,7 @@ function AgentCanvasFlow() {
             color="color-mix(in oklab, var(--color-border) 70%, transparent)"
           />
 
-          {sceneNodes.length >= 3 ? (
+          {sceneNodes.length >= 3 && (viewportSize?.width ?? 0) >= 720 ? (
             <MiniMap
               pannable
               zoomable={false}
@@ -1133,29 +1182,32 @@ function AgentCanvasFlow() {
                 variant="ghost-muted"
                 aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
                 onClick={() => {
-                  const layouts = sceneNodes
-                    .filter((node) => node.type === "agent" || node.type === "note")
-                    .map((node) => ({
-                      x: node.position.x,
-                      y: node.position.y,
-                      width:
-                        typeof node.width === "number"
-                          ? node.width
-                          : typeof node.style?.width === "number"
-                            ? node.style.width
-                            : DEFAULT_AGENT_NODE_SIZE.width,
-                      height:
-                        typeof node.height === "number"
-                          ? node.height
-                          : typeof node.style?.height === "number"
-                            ? node.style.height
-                            : DEFAULT_AGENT_NODE_SIZE.height,
-                    }));
-                  const size = viewportSize ?? { width: 1200, height: 800 };
-                  const cleared = computeFitViewport(layouts, size, {
-                    minZoom: 0.28,
-                    maxZoom: 1,
+                  const agentLayouts = sceneThreads.map((thread, index) => {
+                    const threadKey = threadKeyOf(thread);
+                    const layout = agents[threadKey] ?? resolveAgentNodeLayout(index, undefined);
+                    return {
+                      x: layout.x,
+                      y: layout.y,
+                      width: layout.width,
+                      height: layout.height,
+                      role: layout.role,
+                      threadKey,
+                    };
                   });
+                  const size = viewportSize ?? { width: 1200, height: 800 };
+                  const focusLayouts = preferredFitLayouts(
+                    agentLayouts,
+                    edges,
+                    size.width < 720 ? 0 : 3,
+                  );
+                  const cleared = computeFitViewport(
+                    focusLayouts.length > 0 ? focusLayouts : agentLayouts,
+                    size,
+                    {
+                      minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
+                      maxZoom: 1,
+                    },
+                  );
                   void setViewport(cleared, { duration: 220 }).then(() => {
                     setView(cleared);
                   });

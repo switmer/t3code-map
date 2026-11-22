@@ -26,6 +26,9 @@ export function AgentCanvasLeadEdge({
   data,
 }: EdgeProps<AgentCanvasLeadFlowEdge>) {
   const fanIndex = data?.fanIndex ?? 0;
+  // Horizontal exit/entry with a light fan offset — same routing at chip LOD.
+  const dx = Math.abs(targetX - sourceX);
+  const offset = Math.min(18 + fanIndex * 8, Math.max(8, dx * 0.22));
   const [path] = getSmoothStepPath({
     sourceX,
     sourceY,
@@ -33,8 +36,8 @@ export function AgentCanvasLeadEdge({
     targetY,
     sourcePosition: Position.Right,
     targetPosition: Position.Left,
-    borderRadius: 12,
-    offset: 12 + fanIndex * 6,
+    borderRadius: 10,
+    offset,
   });
   const kind =
     data?.kind === "broadcast"

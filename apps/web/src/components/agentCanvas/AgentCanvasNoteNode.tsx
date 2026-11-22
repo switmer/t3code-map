@@ -1,16 +1,23 @@
 import { Handle, NodeResizer, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useGT } from "gt-react";
-import { Trash2Icon } from "lucide-react";
-import { memo, useState } from "react";
+import { StickyNoteIcon, Trash2Icon } from "lucide-react";
+import { memo, useState, type CSSProperties } from "react";
 
 import { useAgentCanvasStore } from "../../agentCanvasStore";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import type { AgentCanvasLod } from "./agentCanvas.logic";
+import { AGENT_CANVAS_CHIP_SCREEN } from "./design-system/ChipNode";
 
 export type AgentCanvasNoteFlowNode = Node<
   {
     readonly noteId: string;
     readonly text: string;
+    readonly lod?: AgentCanvasLod;
+    readonly zoom?: number;
+    readonly chipScreenWidth?: number;
+    readonly chipScreenHeight?: number;
   },
   "note"
 >;
@@ -28,6 +35,48 @@ export const AgentCanvasNoteNode = memo(function AgentCanvasNoteNode({
   const [draft, setDraft] = useState(data.text);
 
   if (note === undefined) return null;
+
+  const lod = data.lod ?? "interactive";
+  const zoom = data.zoom ?? 1;
+
+  if (lod === "chip") {
+    const safeZoom = Math.max(0.15, Math.min(zoom, 1));
+    const screenW = data.chipScreenWidth ?? Math.min(AGENT_CANVAS_CHIP_SCREEN.width, 160);
+    const screenH = data.chipScreenHeight ?? AGENT_CANVAS_CHIP_SCREEN.height;
+    const firstLine = note.text.split(/\n+/)[0]?.trim() || gt("Note");
+    const innerStyle: CSSProperties = {
+      width: screenW,
+      height: screenH,
+      transform: `scale(${1 / safeZoom})`,
+      transformOrigin: "top left",
+    };
+    return (
+      <div
+        className="relative h-full w-full overflow-visible"
+        data-agent-canvas-note={data.noteId}
+        data-agent-canvas-lod="chip"
+      >
+        <Handle type="target" position={Position.Left} id="in" className="!opacity-0" />
+        <Handle type="source" position={Position.Right} id="out" className="!opacity-0" />
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <div
+                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 shadow-composer"
+                style={innerStyle}
+              />
+            }
+          >
+            <StickyNoteIcon aria-hidden className="size-3 shrink-0 text-warning" />
+            <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-tight text-foreground">
+              {firstLine}
+            </span>
+          </TooltipTrigger>
+          <TooltipPopup>{note.text}</TooltipPopup>
+        </Tooltip>
+      </div>
+    );
+  }
 
   return (
     <div

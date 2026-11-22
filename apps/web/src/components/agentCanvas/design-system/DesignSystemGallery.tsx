@@ -13,7 +13,7 @@ import { CanvasEdgeStylesDemo } from "./gallery/CanvasEdgeStylesDemo";
 import { CanvasFrame } from "./CanvasFrame";
 import { CanvasToolbar } from "./CanvasToolbar";
 import { CardHeader } from "./CardHeader";
-import { ChipNode } from "./ChipNode";
+import { ChipNodeSpecimen } from "./ChipNode";
 import { CodeBlock } from "./CodeBlock";
 import { CompactComposer } from "./CompactComposer";
 import { DiffStat } from "./DiffStat";
@@ -55,9 +55,11 @@ function Section(props: { children: ReactNode; title: string }) {
 
 function SubGrid(props: { children: ReactNode; label: string }) {
   return (
-    <div className="flex flex-col gap-[var(--ac-space-2)]">
+    <div className="flex min-w-0 flex-col gap-[var(--ac-space-2)]">
       <h3 className="text-sm font-medium text-muted-foreground">{props.label}</h3>
-      <div className="flex flex-wrap items-start gap-[var(--ac-space-3)]">{props.children}</div>
+      <div className="flex min-w-0 flex-wrap items-start gap-[var(--ac-space-3)] overflow-x-auto">
+        {props.children}
+      </div>
     </div>
   );
 }
@@ -77,19 +79,19 @@ export function DesignSystemGallery() {
       className={cn("agent-canvas-ds min-h-screen bg-background text-foreground")}
       data-agent-canvas
     >
-      <header className="sticky top-0 z-20 flex items-center justify-between gap-4 border-b border-border bg-background/95 px-6 py-4 backdrop-blur-sm">
-        <div>
-          <h1 className="text-xl font-semibold">Agent Canvas Design System</h1>
-          <p className="text-sm text-muted-foreground">
+      <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-border bg-background/95 px-4 py-3 backdrop-blur-sm sm:gap-4 sm:px-6 sm:py-4">
+        <div className="min-w-0">
+          <h1 className="truncate text-lg font-semibold sm:text-xl">Agent Canvas Design System</h1>
+          <p className="text-xs text-muted-foreground sm:text-sm">
             Dense, calm, terminal-grade canvas chrome.
           </p>
         </div>
-        <Button onClick={toggleTheme} size="sm" variant="outline">
+        <Button onClick={toggleTheme} size="sm" variant="outline" className="shrink-0">
           {dark ? "Light" : "Dark"} mode
         </Button>
       </header>
 
-      <main className="mx-auto flex max-w-6xl flex-col gap-12 px-6 py-10">
+      <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-10 overflow-x-hidden px-4 py-8 sm:gap-12 sm:px-6 sm:py-10">
         <TokenReference />
 
         <Section title="Status">
@@ -125,22 +127,23 @@ export function DesignSystemGallery() {
           {CARD_VARIANTS.map((variant) => (
             <SubGrid key={variant} label={`AgentCard · ${variant}`}>
               {CARD_STATES.map((state) => (
-                <AgentCard
-                  key={state}
-                  body={<p className="text-xs text-muted-foreground">Body slot</p>}
-                  footer={<DiffStat edits={2} reads={4} tests={1} />}
-                  header={
-                    <CardHeader
-                      providerLabel="claude · haiku"
-                      role="lead"
-                      roleLabel="Lead"
-                      statusTone="running"
-                      title={`${state} agent`}
-                    />
-                  }
-                  state={state}
-                  variant={variant}
-                />
+                <div key={state} className="w-full max-w-72 min-w-0 shrink-0 sm:max-w-80">
+                  <AgentCard
+                    body={<p className="text-xs text-muted-foreground">Body slot</p>}
+                    footer={<DiffStat edits={2} reads={4} tests={1} />}
+                    header={
+                      <CardHeader
+                        providerLabel="claude · haiku"
+                        role="lead"
+                        roleLabel="Lead"
+                        statusTone="running"
+                        title={`${state} agent`}
+                      />
+                    }
+                    state={state}
+                    variant={variant}
+                  />
+                </div>
               ))}
             </SubGrid>
           ))}
@@ -148,20 +151,38 @@ export function DesignSystemGallery() {
 
         <Section title="LOD nodes">
           <SubGrid label="PreviewNode">
-            <PreviewNode title="Research thread" />
-            <PreviewNode lines={["Waiting for approval"]} statusTone="waiting" title="PR review" />
-          </SubGrid>
-          <SubGrid label="ChipNode (counter-scaled)">
-            {[0.28, 0.35].map((zoom) => (
-              <ChipNode
-                key={zoom}
-                showAttention
+            <div className="w-full max-w-72 min-w-0">
+              <PreviewNode title="Research thread" />
+            </div>
+            <div className="w-full max-w-72 min-w-0">
+              <PreviewNode
+                lines={["Waiting for approval"]}
                 statusTone="waiting"
-                title={`Coordinator · Zoom ${Math.round(zoom * 100)}%`}
-                zoom={zoom}
+                title="PR review"
               />
-            ))}
-            <ChipNode statusTone="running" title="Worker · auth routes" zoom={0.28} />
+            </div>
+          </SubGrid>
+          <SubGrid label="ChipNode (on-screen at zoom)">
+            <ChipNodeSpecimen
+              caption="At 28% zoom"
+              showAttention
+              statusTone="waiting"
+              title="UI polish"
+              zoom={0.28}
+            />
+            <ChipNodeSpecimen
+              caption="At 35% zoom"
+              showAttention
+              statusTone="waiting"
+              title="Docs pass"
+              zoom={0.35}
+            />
+            <ChipNodeSpecimen
+              caption="At 28% zoom · running"
+              statusTone="running"
+              title="Auth routes"
+              zoom={0.28}
+            />
           </SubGrid>
         </Section>
 
@@ -197,7 +218,7 @@ export function DesignSystemGallery() {
         </Section>
 
         <Section title="Composer shell">
-          <div className="flex flex-wrap gap-4">
+          <div className="grid w-full min-w-0 gap-4 sm:grid-cols-2">
             <CompactComposer placeholder="Unfocused" state="unfocused" />
             <CompactComposer placeholder="Focused" state="focused" value="Draft message" />
             <CompactComposer state="streamingStop" value="Streaming…" />

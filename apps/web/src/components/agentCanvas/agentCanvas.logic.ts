@@ -33,10 +33,17 @@ const AGENT_CANVAS_SCENE_BOUND = 2800;
 /** Screen-space chrome that fit must clear (toolbar, minimap, zoom badge). */
 export const AGENT_CANVAS_FIT_CHROME = {
   top: 56,
-  right: 200,
-  bottom: 120,
+  /** Minimap (~140) + right margin + zoom pill — keep cards clear at ≥78%. */
+  right: 176,
+  bottom: 140,
   left: 40,
 } as const;
+
+/**
+ * Default fit prefers a readable interactive zoom framing the lead cluster,
+ * letting distant workers sit off-screen rather than shrinking everything.
+ */
+export const AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM = 0.85;
 
 export function agentFlowId(threadKey: string): string {
   return `agent:${threadKey}`;
@@ -257,6 +264,45 @@ export function computeFitViewport(
     y: chrome.top + (availH - usedH) / 2 - minY * zoom,
     zoom,
   };
+}
+
+type FitLayout = {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+  readonly role?: AgentCanvasRole;
+  readonly threadKey?: string;
+};
+
+/**
+ * Prefer the lead (or coordinator) plus its first workers for default fit so
+ * zoom stays readable (≥85%). Falls back to the nearest cluster of agents.
+ */
+export function preferredFitLayouts(
+  layouts: ReadonlyArray<FitLayout>,
+  edges: ReadonlyArray<AgentCanvasEdge> = [],
+  maxWorkers = 3,
+): FitLayout[] {
+  if (layouts.length === 0) return [];
+  const byKey = new Map<string, FitLayout>();
+  for (const layout of layouts) {
+    if (layout.threadKey) byKey.set(layout.threadKey, layout);
+  }
+  const lead =
+    layouts.find((layout) => layout.role === "lead") ??
+    layouts.find((layout) => layout.role === "coordinator");
+  if (lead?.threadKey) {
+    const workers = workerKeysForLead(lead.threadKey, edges)
+      .map((key) => byKey.get(key))
+      .filter((entry): entry is FitLayout => entry !== undefined)
+      .slice(0, maxWorkers);
+    return [lead, ...workers];
+  }
+  // No role tags — take the top-left cluster (first few by position).
+  return [...layouts]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .slice(0, Math.min(layouts.length, maxWorkers + 1));
 }
 
 export function isNodeOnScreen(
