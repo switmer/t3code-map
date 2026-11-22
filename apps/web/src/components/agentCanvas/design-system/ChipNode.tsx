@@ -168,15 +168,15 @@ export function ChipNodeSpecimen({
   const pad = 16;
   const statusTone = props.statusTone ?? "idle";
   return (
-    <div className="flex min-w-0 max-w-full flex-col gap-1.5">
+    <div className="flex min-w-0 max-w-full flex-col gap-1.5 overflow-visible">
       <span className="text-[length:var(--ac-font-xs)] font-medium text-muted-foreground">
         {caption}
       </span>
       <div
-        className="box-border overflow-visible rounded-md border border-border/60 bg-muted/20"
+        className="box-border flex items-center overflow-visible rounded-md border border-border/60 bg-muted/20"
         style={{
-          width: screenW + pad * 2,
-          maxWidth: "100%",
+          width: Math.min(screenW + pad * 2, 360),
+          height: screenH + pad * 2,
           padding: pad,
         }}
       >
@@ -186,7 +186,7 @@ export function ChipNodeSpecimen({
           title={props.title}
           showAttention={Boolean(props.showAttention)}
           {...(props.trailing !== undefined ? { trailing: props.trailing } : {})}
-          style={{ width: screenW, minHeight: screenH, height: "auto" }}
+          style={{ width: "100%", height: screenH, maxWidth: screenW }}
         />
       </div>
     </div>

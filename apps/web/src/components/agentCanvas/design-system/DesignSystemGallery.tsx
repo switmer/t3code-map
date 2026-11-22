@@ -55,9 +55,9 @@ function Section(props: { children: ReactNode; title: string }) {
 
 function SubGrid(props: { children: ReactNode; label: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-[var(--ac-space-2)]">
+    <div className="flex min-w-0 flex-col gap-[var(--ac-space-2)] overflow-visible">
       <h3 className="text-sm font-medium text-muted-foreground">{props.label}</h3>
-      <div className="flex min-w-0 flex-wrap items-start gap-[var(--ac-space-3)] overflow-x-auto">
+      <div className="flex min-w-0 flex-wrap items-start gap-[var(--ac-space-3)] overflow-visible">
         {props.children}
       </div>
     </div>
@@ -91,7 +91,7 @@ export function DesignSystemGallery() {
         </Button>
       </header>
 
-      <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-10 overflow-x-hidden px-4 py-8 sm:gap-12 sm:px-6 sm:py-10">
+      <main className="mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-10 overflow-visible px-4 py-8 sm:gap-12 sm:px-6 sm:py-10">
         <TokenReference />
 
         <Section title="Status">
