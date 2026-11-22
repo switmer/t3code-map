@@ -52,7 +52,7 @@ export const AgentCanvasNoteNode = memo(function AgentCanvasNoteNode({
     };
     return (
       <div
-        className="relative h-full w-full overflow-visible"
+        className="relative h-full w-full overflow-hidden"
         data-agent-canvas-note={data.noteId}
         data-agent-canvas-lod="chip"
       >
@@ -62,16 +62,16 @@ export const AgentCanvasNoteNode = memo(function AgentCanvasNoteNode({
           <TooltipTrigger
             render={
               <div
-                className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-warning/40 bg-warning/10 px-2 shadow-composer"
+                className="box-border inline-flex max-w-full items-center gap-1.5 overflow-hidden rounded-md border border-warning/40 bg-warning/10 px-2 shadow-composer"
                 style={innerStyle}
-              />
+              >
+                <StickyNoteIcon aria-hidden className="size-3 shrink-0 text-warning" />
+                <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-tight text-foreground">
+                  {firstLine}
+                </span>
+              </div>
             }
-          >
-            <StickyNoteIcon aria-hidden className="size-3 shrink-0 text-warning" />
-            <span className="min-w-0 flex-1 truncate text-xs font-medium tracking-tight text-foreground">
-              {firstLine}
-            </span>
-          </TooltipTrigger>
+          />
           <TooltipPopup>{note.text}</TooltipPopup>
         </Tooltip>
       </div>

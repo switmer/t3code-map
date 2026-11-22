@@ -25,7 +25,7 @@ Tokens live in `agentCanvasTokens.css` (scoped to `[data-agent-canvas]` and `.ag
 | 0.40 – 0.55 | `preview`     | `PreviewNode` — header + 2–3 summary lines                                                              |
 | < 0.40      | `chip`        | `ChipNode` — title + status + compact attention; **counter-scale** chrome so text stays legible at ~28% |
 
-Default fit uses `minZoom` **0.85** and frames the lead plus its first workers (distant cards may sit off-screen). Fit gutters clear the minimap. Manual zoom-out still reaches chip LOD (~28%); chip screen size is clamped to each node's layout footprint so chips never overlap. Edges keep lead→right / worker→left fan routing at every LOD. Notes become a compact first-line chip below 40% zoom.
+Default fit uses `minZoom` **0.85** and frames the lead plus its first workers (distant cards may sit off-screen). Fit gutters clear the minimap (≥16px top). Manual zoom-out still reaches chip LOD (~28%); chip on-screen size is capped to each node's on-screen layout box (`width×zoom`), and layout gaps keep ≥24px on-screen between boxes. Chip-LOD edges are one bezier per worker (lead right-center → worker left-center). Notes become a compact first-line chip below 40% zoom.
 
 **Do** pass `zoom` into `ChipNode` for counter-scale. In the gallery, wrap specimens with `ChipNodeSpecimen` (simulates RF zoom). **Don't** apply raw counter-scale in an unzoomed gallery cell. **Don't** put a full "Needs you" text badge on chips — use `AttentionBadge compact` (icon + tooltip).
 

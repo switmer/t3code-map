@@ -21,11 +21,24 @@ export const AGENT_CANVAS_INTERACTIVE_ZOOM = 0.55;
 const NODE_GAP_X = 72;
 const NODE_GAP_Y = 56;
 const COLUMNS = 3;
-/** Extra gap beyond the lead card / chip footprint so chip-LOD connectors stay clear. */
-const LEAD_TO_WORKER_GAP_X = 80;
-const WORKER_STACK_GAP_Y = 24;
-const WORKER_GRID_GAP_X = 40;
-const WORKER_GRID_GAP_Y = 24;
+/** Preferred chip zoom used when reserving lead→worker clearance for chip footprints. */
+const AGENT_CANVAS_CHIP_CLEARANCE_ZOOM = 0.28;
+/**
+ * On-screen gap between chip-LOD boxes. 28px (>24) absorbs sub-pixel RF sizing and
+ * chip chrome so measured gaps stay ≥24px after zoom.
+ */
+const AGENT_CANVAS_CHIP_LOD_MIN_SCREEN_GAP = 28;
+/** Flow-space gap that yields ≥28px on-screen at chip LOD (~0.28). */
+const AGENT_CANVAS_CHIP_LOD_FLOW_GAP =
+  AGENT_CANVAS_CHIP_LOD_MIN_SCREEN_GAP / AGENT_CANVAS_CHIP_CLEARANCE_ZOOM;
+/** Extra horizontal room so chip-LOD beziers have a clear right→left run. */
+const LEAD_TO_WORKER_GAP_X = Math.max(
+  AGENT_CANVAS_CHIP_LOD_FLOW_GAP,
+  48 / AGENT_CANVAS_CHIP_CLEARANCE_ZOOM,
+);
+const WORKER_STACK_GAP_Y = AGENT_CANVAS_CHIP_LOD_FLOW_GAP;
+const WORKER_GRID_GAP_X = AGENT_CANVAS_CHIP_LOD_FLOW_GAP;
+const WORKER_GRID_GAP_Y = AGENT_CANVAS_CHIP_LOD_FLOW_GAP;
 /** Compact worker cards so 3–4 still frame clear of toolbar chrome. */
 const DEFAULT_WORKER_NODE_SIZE = { width: 360, height: 300 } as const;
 /** Nodes parked farther than this are ignored by fit-view / minimap framing. */
@@ -33,7 +46,8 @@ const AGENT_CANVAS_SCENE_BOUND = 2800;
 
 /** Screen-space chrome that fit must clear (toolbar, minimap, zoom badge). */
 export const AGENT_CANVAS_FIT_CHROME = {
-  top: 56,
+  /** ≥16px below the canvas chrome so framed card headers stay fully visible. */
+  top: 16,
   /** Minimap (~140) + right margin + zoom pill — keep cards clear at ≥78%. */
   right: 176,
   bottom: 140,
@@ -42,7 +56,7 @@ export const AGENT_CANVAS_FIT_CHROME = {
 
 /** Narrow phones: 12px gutters, no minimap — frame the lead card fully. */
 const AGENT_CANVAS_NARROW_FIT_CHROME = {
-  top: 56,
+  top: 16,
   right: 12,
   bottom: 100,
   left: 12,
@@ -64,9 +78,6 @@ export const AGENT_CANVAS_NARROW_VIEWPORT = 720;
 const AGENT_CANVAS_NARROW_MIN_ZOOM = 0.85;
 const AGENT_CANVAS_NARROW_BODY_CSS_PX = 12;
 const AGENT_CANVAS_NARROW_MIN_BODY_SCREEN_PX = 12;
-
-/** Preferred chip zoom used when reserving lead→worker clearance for chip footprints. */
-const AGENT_CANVAS_CHIP_CLEARANCE_ZOOM = 0.28;
 
 export function agentFlowId(threadKey: string): string {
   return `agent:${threadKey}`;
@@ -98,15 +109,12 @@ export function defaultAgentNodeLayout(index: number): AgentCanvasNodeLayout {
 }
 
 /**
- * Lead→worker start X: clear both the card width and the chip-LOD footprint
- * (~280px on-screen / 0.28 ≈ 1000 flow) so chips never overlap.
+ * Lead→worker start X: clear the lead layout box plus chip-LOD screen gap
+ * (≥24px on-screen at 0.28). Chips are clamped to each node’s layout box, so
+ * spacing the layout boxes is enough to keep chips apart.
  */
-function leadWorkerStartX(
-  lead: Pick<AgentCanvasNodeLayout, "x" | "width">,
-  chipScreenWidth: number,
-): number {
-  const chipFlow = chipScreenWidth / AGENT_CANVAS_CHIP_CLEARANCE_ZOOM;
-  return lead.x + Math.max(lead.width, chipFlow) + LEAD_TO_WORKER_GAP_X;
+function leadWorkerStartX(lead: Pick<AgentCanvasNodeLayout, "x" | "width">): number {
+  return lead.x + lead.width + LEAD_TO_WORKER_GAP_X;
 }
 
 /**
@@ -117,11 +125,10 @@ export function defaultWorkerLayoutForLead(
   lead: Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height">,
   workerIndex: number,
   workerCount = 1,
-  chipScreenWidth = 320,
 ): Pick<AgentCanvasNodeLayout, "x" | "y" | "width" | "height"> {
   const w = DEFAULT_WORKER_NODE_SIZE.width;
   const h = DEFAULT_WORKER_NODE_SIZE.height;
-  const startX = leadWorkerStartX(lead, chipScreenWidth);
+  const startX = leadWorkerStartX(lead);
   const count = Math.max(1, workerCount);
 
   if (count <= 2) {
@@ -167,12 +174,13 @@ export function resolveAgentNodeLayout(
 export function defaultNotePlacement(
   existingCount: number,
 ): Pick<AgentCanvasNote, "x" | "y" | "width" | "height"> {
+  const laneGap = AGENT_CANVAS_CHIP_LOD_FLOW_GAP;
   return {
-    x: 32 + (existingCount % 3) * (DEFAULT_NOTE_SIZE.width + 48),
+    x: 32 + (existingCount % 3) * (DEFAULT_NOTE_SIZE.width + laneGap),
     y:
       -DEFAULT_NOTE_SIZE.height -
-      56 -
-      Math.floor(existingCount / 3) * (DEFAULT_NOTE_SIZE.height + 32),
+      laneGap -
+      Math.floor(existingCount / 3) * (DEFAULT_NOTE_SIZE.height + laneGap),
     width: DEFAULT_NOTE_SIZE.width,
     height: DEFAULT_NOTE_SIZE.height,
   };
@@ -295,11 +303,17 @@ export function computeFitViewport(
   const zoom = Math.min(maxZoom, Math.max(minZoom, Math.min(availW / contentW, availH / contentH)));
   const usedW = contentW * zoom;
   const usedH = contentH * zoom;
-  return {
-    x: chrome.left + (availW - usedW) / 2 - minX * zoom,
-    y: chrome.top + (availH - usedH) / 2 - minY * zoom,
-    zoom,
-  };
+  // When content still overflows at minZoom, pin to the top/left chrome so card
+  // headers stay ≥16px below the toolbar instead of centering (which clips both ends).
+  const x =
+    usedW <= availW + 0.5
+      ? chrome.left + (availW - usedW) / 2 - minX * zoom
+      : chrome.left - minX * zoom;
+  const y =
+    usedH <= availH + 0.5
+      ? chrome.top + (availH - usedH) / 2 - minY * zoom
+      : chrome.top - minY * zoom;
+  return { x, y, zoom };
 }
 
 type FitLayout = {

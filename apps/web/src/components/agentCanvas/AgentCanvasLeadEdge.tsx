@@ -1,4 +1,11 @@
-import { BaseEdge, getSmoothStepPath, Position, type Edge, type EdgeProps } from "@xyflow/react";
+import {
+  BaseEdge,
+  getBezierPath,
+  getSmoothStepPath,
+  Position,
+  type Edge,
+  type EdgeProps,
+} from "@xyflow/react";
 
 import { canvasEdgeClassName } from "./design-system/CanvasEdgeStyles";
 
@@ -12,8 +19,8 @@ export type AgentCanvasLeadFlowEdge = Edge<
 >;
 
 /**
- * Lead→worker smooth step. Horizontal exit/entry so fans stay parallel and
- * never loop behind cards. Same routing at chip LOD (mid handles).
+ * Lead→worker edges: smooth-step fans at interactive/preview; one cubic bezier
+ * per worker at chip LOD (right-center → left-center, no orthogonal loops).
  */
 export function AgentCanvasLeadEdge({
   id,
@@ -30,19 +37,26 @@ export function AgentCanvasLeadEdge({
   const chipLod = Boolean(data?.chipLod);
   const dx = Math.abs(targetX - sourceX);
   const dy = Math.abs(targetY - sourceY);
-  // Spread parallel fans vertically; keep a clear horizontal run even when chips are close.
-  const offset = Math.max(chipLod ? 20 : 14, Math.min(chipLod ? 36 : 28, dx * 0.2)) + fanIndex * 10;
-  const borderRadius = dy < 24 ? 4 : 10;
-  const [path] = getSmoothStepPath({
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
-    sourcePosition: Position.Right,
-    targetPosition: Position.Left,
-    borderRadius,
-    offset,
-  });
+  const [path] = chipLod
+    ? getBezierPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        curvature: 0.25,
+      })
+    : getSmoothStepPath({
+        sourceX,
+        sourceY,
+        targetX,
+        targetY,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
+        borderRadius: dy < 24 ? 4 : 10,
+        offset: Math.max(14, Math.min(28, dx * 0.2)) + fanIndex * 10,
+      });
   const kind =
     data?.kind === "broadcast"
       ? "broadcast"

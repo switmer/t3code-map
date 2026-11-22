@@ -632,13 +632,10 @@ function AgentCanvasFlow() {
       });
       const chip =
         noteLod === "chip"
-          ? chipSizeForLayout(liveZoom, {
-              width: Math.max(note.width, 200 / Math.max(liveZoom, 0.15)),
-              height: Math.max(note.height, 36 / Math.max(liveZoom, 0.15)),
-            })
+          ? chipSizeForLayout(liveZoom, { width: note.width, height: note.height })
           : null;
-      const width = note.width;
-      const height = note.height;
+      const width = chip ? chip.flowWidth : note.width;
+      const height = chip ? chip.flowHeight : note.height;
       return {
         id: noteFlowId(note.id),
         type: "note" as const,
@@ -1275,55 +1272,57 @@ function AgentCanvasFlow() {
             />
           ) : null}
 
-          {/* Above the minimap so the % control never overlaps its bottom edge. */}
-          <Panel position="bottom-right" className="agent-canvas-zoom-panel">
-            <div className="flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-0.5 shadow-composer backdrop-blur-md">
-              <Button
-                size="xs"
-                variant="ghost-muted"
-                aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
-                onClick={() => {
-                  const agentLayouts = sceneThreads.map((thread, index) => {
-                    const threadKey = threadKeyOf(thread);
-                    const layout = agents[threadKey] ?? resolveAgentNodeLayout(index, undefined);
-                    return {
-                      x: layout.x,
-                      y: layout.y,
-                      width: layout.width,
-                      height: layout.height,
-                      role: layout.role,
-                      threadKey,
-                    };
-                  });
-                  // Prefer live surface size — ResizeObserver state can lag a resize by a frame.
-                  const size =
-                    surface && surface.clientWidth > 0
-                      ? { width: surface.clientWidth, height: surface.clientHeight }
-                      : (viewportSize ?? { width: 1200, height: 800 });
-                  const narrow = size.width < AGENT_CANVAS_NARROW_VIEWPORT;
-                  const focusLayouts = preferredFitLayouts(agentLayouts, edges, narrow ? 0 : 3);
-                  const leadLayout = focusLayouts[0] ?? agentLayouts[0];
-                  const fit =
-                    narrow && leadLayout
-                      ? computeNarrowLeadFit(leadLayout, size)
-                      : computeFitViewport(
-                          focusLayouts.length > 0 ? focusLayouts : agentLayouts,
-                          size,
-                          {
-                            minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
-                            maxZoom: 1,
-                          },
-                        );
-                  const cleared = { x: fit.x, y: fit.y, zoom: fit.zoom };
-                  void setViewport(cleared, { duration: 220 }).then(() => {
-                    setView(cleared);
-                  });
-                }}
-              >
-                <span className="min-w-10 text-center tabular-nums">{zoomPercent}%</span>
-              </Button>
-            </div>
-          </Panel>
+          {/* Hide on narrow — the pill sits on the lead composer corner at 100%. */}
+          {!narrowViewport ? (
+            <Panel position="bottom-right" className="agent-canvas-zoom-panel">
+              <div className="flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-0.5 shadow-composer backdrop-blur-md">
+                <Button
+                  size="xs"
+                  variant="ghost-muted"
+                  aria-label={gt("Fit view · {percent}%", { percent: zoomPercent })}
+                  onClick={() => {
+                    const agentLayouts = sceneThreads.map((thread, index) => {
+                      const threadKey = threadKeyOf(thread);
+                      const layout = agents[threadKey] ?? resolveAgentNodeLayout(index, undefined);
+                      return {
+                        x: layout.x,
+                        y: layout.y,
+                        width: layout.width,
+                        height: layout.height,
+                        role: layout.role,
+                        threadKey,
+                      };
+                    });
+                    // Prefer live surface size — ResizeObserver state can lag a resize by a frame.
+                    const size =
+                      surface && surface.clientWidth > 0
+                        ? { width: surface.clientWidth, height: surface.clientHeight }
+                        : (viewportSize ?? { width: 1200, height: 800 });
+                    const narrow = size.width < AGENT_CANVAS_NARROW_VIEWPORT;
+                    const focusLayouts = preferredFitLayouts(agentLayouts, edges, narrow ? 0 : 3);
+                    const leadLayout = focusLayouts[0] ?? agentLayouts[0];
+                    const fit =
+                      narrow && leadLayout
+                        ? computeNarrowLeadFit(leadLayout, size)
+                        : computeFitViewport(
+                            focusLayouts.length > 0 ? focusLayouts : agentLayouts,
+                            size,
+                            {
+                              minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
+                              maxZoom: 1,
+                            },
+                          );
+                    const cleared = { x: fit.x, y: fit.y, zoom: fit.zoom };
+                    void setViewport(cleared, { duration: 220 }).then(() => {
+                      setView(cleared);
+                    });
+                  }}
+                >
+                  <span className="min-w-10 text-center tabular-nums">{zoomPercent}%</span>
+                </Button>
+              </div>
+            </Panel>
+          ) : null}
 
           <Panel position="bottom-center" className="mb-5!">
             <div className="flex items-center gap-0.5 rounded-full border border-border bg-popover/95 p-1 shadow-composer backdrop-blur-md">

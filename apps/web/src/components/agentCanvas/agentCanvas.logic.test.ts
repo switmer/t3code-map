@@ -10,6 +10,7 @@ import {
   computeFitViewport,
   computeNarrowLeadFit,
   defaultAgentNodeLayout,
+  defaultNotePlacement,
   defaultWorkerLayoutForLead,
   isNodeFullyFramed,
   isNodeOnScreen,
@@ -62,8 +63,9 @@ describe("agent canvas layout", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
     const first = defaultWorkerLayoutForLead(lead, 0, 2);
     const second = defaultWorkerLayoutForLead(lead, 1, 2);
-    // Clears chip-LOD footprint (320 / 0.28) plus gap, not just the card width.
-    expect(first.x).toBe(lead.x + Math.max(lead.width, 320 / 0.28) + 80);
+    // Layout boxes clear by ≥24px on-screen; lead→worker gets extra bezier run (≥48px).
+    expect(first.x).toBe(lead.x + lead.width + 48 / 0.28);
+    expect(second.y - (first.y + first.height)).toBeCloseTo(28 / 0.28, 5);
     expect(second.x).toBe(first.x);
     expect(second.y).toBeGreaterThan(first.y + first.height);
   });
@@ -215,13 +217,41 @@ describe("agent canvas layout", () => {
     expect(isSceneClearOfChrome(preferred, view, viewport)).toBe(true);
   });
 
-  it("keeps chip on-screen width wide enough for ~18–22 chars", () => {
+  it("places notes with chip-LOD clearance above the agent lane", () => {
+    const first = defaultNotePlacement(0);
+    const second = defaultNotePlacement(1);
+    expect(first.y + first.height).toBeLessThanOrEqual(-28 / 0.28 + 0.001);
+    expect(second.x - (first.x + first.width)).toBeCloseTo(28 / 0.28, 5);
+  });
+
+  it("never lets chip on-screen footprint exceed the node layout box", () => {
     const agent = chipSizeForLayout(0.28, { width: 400, height: 340 });
-    expect(agent.screenWidth).toBe(320);
-    expect(agent.flowWidth).toBeCloseTo(320 / 0.28, 5);
+    expect(agent.screenWidth).toBeCloseTo(400 * 0.28, 5);
+    expect(agent.screenHeight).toBeCloseTo(Math.min(44, 340 * 0.28), 5);
+    expect(agent.flowWidth).toBeLessThanOrEqual(400 + 0.001);
+    expect(agent.flowHeight).toBeLessThanOrEqual(340 + 0.001);
+    const wide = chipSizeForLayout(0.28, { width: 1200, height: 200 });
+    expect(wide.screenWidth).toBe(320);
+    expect(wide.flowWidth).toBeCloseTo(320 / 0.28, 5);
     const note = chipSizeForLayout(0.28, { width: 180, height: 88 });
-    expect(note.screenWidth).toBeLessThan(320);
-    expect(note.screenWidth).toBeGreaterThanOrEqual(96);
+    expect(note.screenWidth).toBeCloseTo(180 * 0.28, 5);
+    expect(note.flowWidth).toBeLessThanOrEqual(180 + 0.001);
+  });
+
+  it("pins fit to the top chrome when content overflows at minZoom", () => {
+    const layouts = [
+      { x: 0, y: 0, width: 520, height: 560 },
+      { x: 620, y: 0, width: 360, height: 300 },
+      { x: 620, y: 400, width: 360, height: 300 },
+      { x: 620, y: 800, width: 360, height: 300 },
+    ];
+    const viewport = { width: 1512, height: 982 };
+    const view = computeFitViewport(layouts, viewport, {
+      minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
+      maxZoom: 1,
+    });
+    const tops = layouts.map((layout) => layout.y * view.zoom + view.y);
+    expect(Math.min(...tops)).toBeGreaterThanOrEqual(16 - 0.5);
   });
 
   it("frames the lead card fully on a narrow phone viewport at readable zoom", () => {

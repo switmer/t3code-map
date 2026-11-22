@@ -8,7 +8,8 @@ import { StatusDot } from "./StatusDot";
 
 /**
  * Preferred on-screen chip size (counter-scaled so text stays readable at 20–40% zoom).
- * ~320px fits ~18–22 chars of `ac-font-sm` plus status/attention chrome.
+ * ~320px fits ~18–22 chars of `ac-font-sm` plus status/attention chrome — but only when
+ * the node’s on-screen layout box is at least that wide (never overflow the box).
  */
 export const AGENT_CANVAS_CHIP_SCREEN = { width: 320, height: 44 } as const;
 
@@ -23,14 +24,11 @@ export function chipSizeForLayout(
   readonly screenHeight: number;
 } {
   const z = Math.max(0.15, Math.min(zoom, 1));
-  // Prefer the readable ~18–22 char chip. Only shrink for truly tiny footprints (notes).
-  const tiny = layout.width < 220 || layout.height < 100;
-  const screenWidth = tiny
-    ? Math.min(AGENT_CANVAS_CHIP_SCREEN.width, Math.max(layout.width * z, 96))
-    : AGENT_CANVAS_CHIP_SCREEN.width;
-  const screenHeight = tiny
-    ? Math.min(AGENT_CANVAS_CHIP_SCREEN.height, Math.max(layout.height * z, 28))
-    : AGENT_CANVAS_CHIP_SCREEN.height;
+  // Hard cap: chip on-screen footprint ≤ node on-screen layout box.
+  const boxW = Math.max(0, layout.width * z);
+  const boxH = Math.max(0, layout.height * z);
+  const screenWidth = Math.min(AGENT_CANVAS_CHIP_SCREEN.width, boxW);
+  const screenHeight = Math.min(AGENT_CANVAS_CHIP_SCREEN.height, boxH);
   return {
     flowWidth: screenWidth / z,
     flowHeight: screenHeight / z,
@@ -77,7 +75,7 @@ function ChipChrome({
   return (
     <div
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2.5 shadow-composer",
+        "box-border inline-flex max-w-full items-center gap-1.5 overflow-hidden rounded-md border border-border bg-card px-2.5 shadow-composer",
         statusTone === "failed" && "border-destructive/45",
         statusTone === "waiting" && "border-warning/45",
         statusTone === "running" && "border-success/40",
