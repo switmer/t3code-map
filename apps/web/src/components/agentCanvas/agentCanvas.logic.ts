@@ -32,10 +32,10 @@ const AGENT_CANVAS_SCENE_BOUND = 2800;
 
 /** Screen-space chrome that fit must clear (toolbar, minimap, zoom badge). */
 export const AGENT_CANVAS_FIT_CHROME = {
-  top: 20,
-  right: 172,
-  bottom: 104,
-  left: 28,
+  top: 56,
+  right: 200,
+  bottom: 120,
+  left: 40,
 } as const;
 
 export function agentFlowId(threadKey: string): string {
@@ -156,7 +156,8 @@ export function agentCanvasLod(input: {
   readonly zoom: number;
 }): AgentCanvasLod {
   if (!input.onScreen) return "chip";
-  if (input.zoom < 0.35) return "chip";
+  // Below ~40%: counter-scaled chips so status stays legible when zoomed out.
+  if (input.zoom < 0.4) return "chip";
   if (input.zoom < AGENT_CANVAS_INTERACTIVE_ZOOM) return "preview";
   return "interactive";
 }
@@ -479,32 +480,6 @@ export function agentCanvasStatusTone(thread: {
   if (thread.latestRun?.status === "failed") return "failed";
   if (thread.latestRun?.status === "completed") return "idle";
   return "ready";
-}
-
-/** Running elapsed start — only when the shell actually has a start timestamp. */
-export function agentCanvasRunningStartedAt(thread: {
-  readonly runtime?:
-    | {
-        readonly activityStartedAt?: string | null | undefined;
-        readonly status?: string | null | undefined;
-      }
-    | null
-    | undefined;
-  readonly latestRun?:
-    | {
-        readonly startedAt?: string | null | undefined;
-        readonly status?: string | null | undefined;
-      }
-    | null
-    | undefined;
-}): string | null {
-  if (thread.runtime?.status === "running" && thread.runtime.activityStartedAt) {
-    return thread.runtime.activityStartedAt;
-  }
-  if (thread.latestRun?.status === "running" && thread.latestRun.startedAt) {
-    return thread.latestRun.startedAt;
-  }
-  return null;
 }
 
 export type AgentCanvasPreviewKind = "goal" | "completed" | "running" | "titled" | "empty";

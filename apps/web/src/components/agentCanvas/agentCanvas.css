@@ -1,3 +1,5 @@
+@import "./agentCanvasTokens.css";
+
 /* Crafted canvas chrome — FigJam / tldraw restraint, app tokens only. */
 .agent-canvas-flow {
   --xy-background-color: transparent;
@@ -278,6 +280,9 @@
 [data-chat-density="compact"] .messages-timeline-scroll {
   scrollbar-gutter: auto;
   scrollbar-width: thin;
+  /* Keep the first visible row fully below the card header / scroll clip. */
+  scroll-padding-top: var(--ac-space-2, 8px);
+  padding-top: var(--ac-space-1, 4px);
   /* Fill the conversation pane (flex, not % height). justify-content is set in JS:
      flex-end only for short threads — with overflow it fights scrollTop and hollows the pane. */
   flex: 1 1 0% !important;

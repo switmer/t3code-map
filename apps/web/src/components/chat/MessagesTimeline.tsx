@@ -1454,13 +1454,14 @@ const ConversationTimeline = memo(function ConversationTimeline({
       content.style.marginTop = slack > 0 ? `${slack}px` : "0px";
       node.scrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
       // Snap so the first visible row is complete (never half-clipped under the header).
+      const pad = 8;
       const scrollBox = node.getBoundingClientRect();
       const rowNodes = node.querySelectorAll<HTMLElement>("[data-timeline-row-id]");
       for (const row of rowNodes) {
         const box = row.getBoundingClientRect();
         if (box.bottom <= scrollBox.top + 1) continue;
-        if (box.top < scrollBox.top - 0.5) {
-          node.scrollTop = Math.max(0, node.scrollTop - (scrollBox.top - box.top));
+        if (box.top < scrollBox.top + pad) {
+          node.scrollTop = Math.max(0, node.scrollTop - (scrollBox.top + pad - box.top));
         }
         break;
       }

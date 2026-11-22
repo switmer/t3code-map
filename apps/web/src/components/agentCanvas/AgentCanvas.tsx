@@ -107,6 +107,7 @@ import {
 import { AgentCanvasLeadEdge } from "./AgentCanvasLeadEdge";
 import { AgentCanvasNode, type AgentCanvasAgentFlowNode } from "./AgentCanvasNode";
 import { AgentCanvasNoteNode, type AgentCanvasNoteFlowNode } from "./AgentCanvasNoteNode";
+import { AGENT_CANVAS_CHIP_SCREEN } from "./design-system/ChipNode";
 
 type CanvasFlowNode = AgentCanvasAgentFlowNode | AgentCanvasNoteFlowNode;
 
@@ -322,7 +323,7 @@ function AgentCanvasFlow() {
     const cleared = computeFitViewport(
       sceneLayouts.map((entry) => entry.layout),
       viewportSize,
-      { minZoom: 0.35, maxZoom: 1 },
+      { minZoom: 0.42, maxZoom: 1 },
     );
     void setViewport(cleared, { duration: 0 }).then(() => {
       setView(cleared);
@@ -507,25 +508,26 @@ function AgentCanvasFlow() {
       const onScreen = viewportSize === null ? true : isNodeOnScreen(layout, view, viewportSize);
       const lod = agentCanvasLod({ focused, onScreen, zoom: view.zoom });
       const workerCount = workerKeysForLead(threadKey, edges).length;
-      // Interactive threads keep a stored height so the live ChatView + composer have room;
-      // preview/chip cards size to their compact chrome.
-      const sizedToContent = lod !== "interactive";
+      // Chip LOD: flow size = screen size / zoom so inverse-scaled chrome stays readable.
+      const chipFlowW = AGENT_CANVAS_CHIP_SCREEN.width / Math.max(view.zoom, 0.15);
+      const chipFlowH = AGENT_CANVAS_CHIP_SCREEN.height / Math.max(view.zoom, 0.15);
+      const width = lod === "chip" ? chipFlowW : layout.width;
+      const height = lod === "chip" ? chipFlowH : lod === "interactive" ? layout.height : undefined;
       return {
         id: agentFlowId(threadKey),
         type: "agent" as const,
         position: { x: layout.x, y: layout.y },
-        width: layout.width,
-        ...(sizedToContent ? {} : { height: layout.height }),
+        width,
+        ...(height !== undefined ? { height } : {}),
         hidden: !isInCanvasScene(layout),
-        dragHandle: ".drag-handle",
-        style: sizedToContent
-          ? { width: layout.width }
-          : { width: layout.width, height: layout.height },
+        ...(lod === "interactive" ? { dragHandle: ".drag-handle" as const } : {}),
+        style: height !== undefined ? { width, height } : { width },
         data: {
           threadKey,
           thread,
           role: layout.role,
           lod,
+          zoom: view.zoom,
           focused,
           workerCount,
           needsAttention: attentionKeys.includes(threadKey),
@@ -950,7 +952,10 @@ function AgentCanvasFlow() {
   const sceneAgentCount = sceneNodes.filter((node) => node.type === "agent").length;
 
   return (
-    <div className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+    <div
+      data-agent-canvas
+      className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background"
+    >
       <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border/70 px-3">
         <h1 className="text-sm font-medium tracking-tight">{gt("Agent canvas")}</h1>
         <span className="text-2xs text-muted-foreground">
@@ -1068,7 +1073,7 @@ function AgentCanvasFlow() {
           onSelectionDragStop={endHistoryGesture}
           onDelete={onDelete}
           onMoveEnd={onMoveEnd}
-          minZoom={0.2}
+          minZoom={0.28}
           maxZoom={2.5}
           snapToGrid
           snapGrid={[8, 8]}
@@ -1147,7 +1152,7 @@ function AgentCanvasFlow() {
                     }));
                   const size = viewportSize ?? { width: 1200, height: 800 };
                   const cleared = computeFitViewport(layouts, size, {
-                    minZoom: 0.35,
+                    minZoom: 0.42,
                     maxZoom: 1,
                   });
                   void setViewport(cleared, { duration: 220 }).then(() => {

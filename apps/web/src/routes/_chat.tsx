@@ -1,4 +1,4 @@
-import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
+import { Outlet, createFileRoute, redirect, useRouterState } from "@tanstack/react-router";
 
 import { useAgentCanvasStore } from "../agentCanvasStore";
 import { AgentCanvas } from "../components/agentCanvas/AgentCanvas";
@@ -15,6 +15,11 @@ function ChatRouteLayout() {
   // Render both routes here so draft promotion keeps the same ChatView mounted.
   const { shownTarget, modalOpen } = useShownThreadRouteTarget();
   const canvasMode = useAgentCanvasStore((state) => state.mode === "canvas");
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isDesignSystemGallery = pathname.includes("/canvas-design-system");
+  if (isDesignSystemGallery) {
+    return <Outlet />;
+  }
   if (canvasMode && !modalOpen) {
     return (
       <>

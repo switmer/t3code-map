@@ -163,6 +163,7 @@ describe("agent canvas layout", () => {
     expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 1 })).toBe("interactive");
     expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 0.45 })).toBe("preview");
     expect(agentCanvasLod({ focused: true, onScreen: true, zoom: 0.3 })).toBe("chip");
+    expect(agentCanvasLod({ focused: false, onScreen: true, zoom: 0.38 })).toBe("chip");
     expect(agentCanvasLod({ focused: true, onScreen: false, zoom: 1 })).toBe("chip");
   });
 
