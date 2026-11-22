@@ -702,6 +702,13 @@ function workGroupId(timelineEntryId: string): string {
   return `work-group:${timelineEntryId}`;
 }
 
+function isWorkGroupExpanded(
+  input: { expandedWorkGroupIds?: ReadonlySet<string>; expandAllWorkGroups?: boolean },
+  groupId: string,
+): boolean {
+  return input.expandAllWorkGroups === true || (input.expandedWorkGroupIds?.has(groupId) ?? false);
+}
+
 function expandedWorkGroupRow(
   groupId: string,
   createdAt: string,
@@ -1616,6 +1623,8 @@ export function deriveMessagesTimelineRows(
     expandedRunIds?: ReadonlySet<RunId>;
     expandedAttemptIds?: ReadonlySet<RunAttemptId>;
     expandedWorkGroupIds?: ReadonlySet<string>;
+    /** Compact canvas panes: flatten tools and keep turn folds open. */
+    expandAllWorkGroups?: boolean;
     isWorking: boolean;
     /** Native subagent work has no app run; runless entries form the live response. */
     runlessWorkActive?: boolean;
@@ -1698,21 +1707,23 @@ export function deriveMessagesTimelineRows(
   const collapsedEntryIds = new Set<string>();
   const collapsedFoldMemberIds = new Set<string>();
   for (const fold of foldsByAnchorEntryId.values()) {
-    if (!input.expandedRunIds?.has(fold.runId)) {
-      for (const entryId of fold.hiddenEntryIds) {
-        collapsedEntryIds.add(entryId);
-      }
-      for (const entryId of fold.entryIds) {
-        collapsedFoldMemberIds.add(entryId);
-      }
+    if (input.expandAllWorkGroups === true || input.expandedRunIds?.has(fold.runId)) {
+      continue;
+    }
+    for (const entryId of fold.hiddenEntryIds) {
+      collapsedEntryIds.add(entryId);
+    }
+    for (const entryId of fold.entryIds) {
+      collapsedFoldMemberIds.add(entryId);
     }
   }
   const collapsedSupersededEntryIds = new Set<string>();
   for (const fold of supersededFoldsByAnchorEntryId.values()) {
-    if (!input.expandedAttemptIds?.has(fold.attemptId)) {
-      for (const entryId of fold.hiddenEntryIds) {
-        collapsedSupersededEntryIds.add(entryId);
-      }
+    if (input.expandAllWorkGroups === true || input.expandedAttemptIds?.has(fold.attemptId)) {
+      continue;
+    }
+    for (const entryId of fold.hiddenEntryIds) {
+      collapsedSupersededEntryIds.add(entryId);
     }
   }
   if (input.pendingApprovalRequestIds?.size) {
@@ -1802,7 +1813,7 @@ export function deriveMessagesTimelineRows(
             entry: (latestRunningToolEntry ?? latestVisibleToolEntry).entry,
             groupedEntries: visibleActiveToolEntries.map((entry) => entry.entry),
             groupId,
-            expanded: input.expandedWorkGroupIds?.has(groupId) ?? false,
+            expanded: isWorkGroupExpanded(input, groupId),
             active: latestToolKeepsActivityLive,
             ...(latestThoughtEntry ? { thought: latestThoughtEntry.entry } : {}),
           };
@@ -1954,7 +1965,7 @@ export function deriveMessagesTimelineRows(
     }
 
     const turnFold = foldsByAnchorEntryId.get(timelineEntry.id);
-    if (turnFold) {
+    if (turnFold && input.expandAllWorkGroups !== true) {
       const deferredWorkItemIds = [...turnFold.entryIds].flatMap((entryId) => {
         const entry = timelineEntryById.get(entryId);
         return entry?.kind === "work" &&
@@ -2110,7 +2121,7 @@ export function deriveMessagesTimelineRows(
         const activeInProgressToolEntries = visibleGroupedEntries.filter(workEntryIsInActiveRun);
         if (activeInProgressToolEntries.length > 0) {
           const groupId = workGroupId(timelineEntry.id);
-          const expanded = input.expandedWorkGroupIds?.has(groupId) ?? false;
+          const expanded = isWorkGroupExpanded(input, groupId);
           const latestActiveToolEntry = activeInProgressToolEntries.at(-1)!;
           nextRows.push({
             kind: "work-live",
@@ -2144,9 +2155,25 @@ export function deriveMessagesTimelineRows(
                 ? summarizeToolGroup(visibleGroupedEntries, resolve).summary
                 : singleToolCallLabel(singleEntry, resolve),
           });
+        } else if (input.expandAllWorkGroups === true) {
+          // Compact canvas: flatten tools to dense one-line rows (no toggle / nested list).
+          for (const entry of visibleGroupedEntries) {
+            nextRows.push({
+              kind: "work",
+              id: `${timelineEntry.id}:${entry.id}`,
+              createdAt: timelineEntry.createdAt,
+              groupedEntries: [entry],
+              isExpandedToolGroup: false,
+              displayLabel: !workLogEntryIsToolLike(entry)
+                ? entry.label
+                : toolGroupAction(entry) === "edit"
+                  ? summarizeToolGroup([entry], resolve).summary
+                  : singleToolCallLabel(entry, resolve),
+            });
+          }
         } else {
           const groupId = workGroupId(timelineEntry.id);
-          const expanded = input.expandedWorkGroupIds?.has(groupId) ?? false;
+          const expanded = isWorkGroupExpanded(input, groupId);
           const summaryKind = toolGroupSummaryKind(visibleGroupedEntries);
           const primarySourceEntry = visibleGroupedEntries.find(
             (entry) => entry.toolSource !== undefined,
@@ -2391,7 +2418,7 @@ export function deriveMessagesTimelineRows(
     const failedGroupAnchor = latestToolFailed ? activeWorkAnchor : undefined;
     if (failedGroupAnchor) {
       const groupId = workGroupId(failedGroupAnchor.id);
-      const expanded = input.expandedWorkGroupIds?.has(groupId) ?? false;
+      const expanded = isWorkGroupExpanded(input, groupId);
       const groupedEntries = visibleActiveToolEntries.map((entry) => entry.entry);
       nextRows.push({
         kind: "thinking",

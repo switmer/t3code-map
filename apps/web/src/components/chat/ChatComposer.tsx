@@ -88,6 +88,7 @@ import {
   replaceTextRange,
 } from "../../composer-logic";
 import { DEFAULT_COMPOSER_PLACEHOLDER } from "../../composerPlaceholder";
+import { useChatDensity } from "./chatDensity";
 import { deriveComposerSendState, getAntigravitySendBlockReason } from "../ChatView.logic";
 import { threadHasStarted } from "../../lib/chatThreadActions";
 import {
@@ -496,6 +497,7 @@ const NO_PROVIDER_SLASH_COMMANDS: ServerProvider["slashCommands"] = [];
 export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps) {
   const gt = useGT();
   const m = useMessages();
+  const chatDensity = useChatDensity();
   const {
     composerDraftTarget,
     environmentId,
@@ -3550,6 +3552,8 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                     />
                   ) : showProviderUnavailable ? (
                     gt("Enable a provider in Settings")
+                  ) : chatDensity === "compact" ? (
+                    gt("Message agent")
                   ) : (
                     gt("Ask anything...")
                   )}
@@ -3741,7 +3745,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                             ? gt("Choose a project above to start a thread")
                             : showProviderUnavailable
                               ? gt("Enable a provider in Settings to send a message")
-                              : (offeredPromptSuggestion ?? m(DEFAULT_COMPOSER_PLACEHOLDER))
+                              : (offeredPromptSuggestion ??
+                                (chatDensity === "compact"
+                                  ? gt("Message agent")
+                                  : m(DEFAULT_COMPOSER_PLACEHOLDER)))
                     }
                     placeholderSuffix={
                       offeredPromptSuggestion !== null ? (

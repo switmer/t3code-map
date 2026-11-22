@@ -1,0 +1,751 @@
+@import "./agentCanvasTokens.css";
+
+/* Crafted canvas chrome — FigJam / tldraw restraint, app tokens only. */
+.agent-canvas-flow {
+  --xy-background-color: transparent;
+  --xy-node-border-radius: 12px;
+  --xy-node-boxshadow-default: none;
+  --xy-node-boxshadow-selected: none;
+  --xy-edge-stroke: color-mix(in oklab, var(--color-muted-foreground) 42%, transparent);
+  --xy-edge-stroke-width: 1.25;
+  --xy-edge-stroke-selected: var(--color-primary);
+  --xy-connectionline-stroke: var(--color-primary);
+  --xy-connectionline-stroke-width: 1.25;
+  --xy-selection-background-color: color-mix(in oklab, var(--color-primary) 8%, transparent);
+  --xy-selection-border: 1px solid color-mix(in oklab, var(--color-primary) 35%, transparent);
+  --xy-minimap-background-color: color-mix(in oklab, var(--color-popover) 96%, transparent);
+  --xy-minimap-mask-background-color: color-mix(in oklab, var(--color-foreground) 10%, transparent);
+  --xy-minimap-node-background-color: var(--color-muted);
+  --xy-minimap-node-stroke-color: var(--color-border);
+  --xy-controls-button-background-color: var(--color-popover);
+  --xy-controls-button-border-color: var(--color-border);
+  --xy-controls-button-color: var(--color-foreground);
+  --xy-controls-button-background-color-hover: var(--color-muted);
+  --xy-attribution-background-color: transparent;
+}
+
+.agent-canvas-flow .react-flow__attribution {
+  display: none;
+}
+
+.agent-canvas-flow .react-flow__node {
+  transition: box-shadow 120ms ease;
+}
+
+.agent-canvas-flow .react-flow__node.selected,
+.agent-canvas-flow .react-flow__node:focus-within {
+  z-index: 5;
+}
+
+.agent-canvas-flow .react-flow__panel {
+  z-index: 8;
+}
+
+.agent-canvas-flow .react-flow__minimap {
+  z-index: 8;
+}
+
+.agent-canvas-flow .react-flow__handle {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--color-background);
+  background: color-mix(in oklab, var(--color-muted-foreground) 55%, var(--color-background));
+  opacity: 0;
+  transition:
+    opacity 100ms ease,
+    transform 100ms ease,
+    background-color 100ms ease,
+    box-shadow 100ms ease;
+  cursor: crosshair;
+}
+
+.agent-canvas-flow .react-flow__node:hover .react-flow__handle,
+.agent-canvas-flow .react-flow__node.selected .react-flow__handle,
+.agent-canvas-flow .react-flow__handle:focus-visible,
+.agent-canvas-flow .react-flow__handle:hover {
+  opacity: 1;
+}
+
+.agent-canvas-flow .react-flow__handle-right,
+.agent-canvas-flow .react-flow__handle[data-handleid="out"],
+.agent-canvas-flow .react-flow__handle[data-handleid^="out-"],
+.agent-canvas-flow .react-flow__handle[data-handleid="out-bottom"] {
+  background: var(--color-primary);
+}
+
+/* Lead fan outlets — positions come from inline style (leadHandleTopPercent). */
+
+.agent-canvas-flow .react-flow__handle:hover,
+.agent-canvas-flow .react-flow__handle:focus-visible {
+  transform: scale(1.25);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 22%, transparent);
+}
+
+.agent-canvas-flow .react-flow__edge {
+  z-index: 6;
+}
+
+.agent-canvas-flow .react-flow__edges {
+  z-index: 6;
+}
+
+/* Chip LOD connectors sit above layout-sized node boxes so short gaps stay visible. */
+.agent-canvas-flow .react-flow__edge.chip-lod {
+  z-index: 1000 !important;
+}
+
+.agent-canvas-flow .react-flow__edges:has(.chip-lod) {
+  z-index: 1000;
+}
+
+/* Screen-pixel strokes so chip LOD (28%) edges stay visible (no sub-pixel hairlines). */
+.agent-canvas-flow .react-flow__edge-path,
+.agent-canvas-flow .react-flow__edge path {
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+
+.agent-canvas-flow .react-flow__edge.lead path {
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
+  stroke-width: 2px;
+  stroke-dasharray: none !important;
+}
+
+.agent-canvas-flow .react-flow__edge.lead.is-active path,
+.agent-canvas-flow .react-flow__edge.lead.animated path {
+  stroke: color-mix(in oklab, var(--color-primary) 72%, var(--color-muted-foreground));
+  stroke-width: 2.25px;
+  stroke-dasharray: 4 5 !important;
+  animation: agent-canvas-edge-flow 1.1s linear infinite;
+}
+
+/* Chip LOD: beat Tailwind [stroke]/[stroke-width] utilities — must stay clearly visible at 28%. */
+.agent-canvas-flow .react-flow__edge.chip-lod path,
+.agent-canvas-flow .react-flow__edge path.chip-lod-path {
+  stroke: color-mix(
+    in oklab,
+    var(--color-foreground) 78%,
+    var(--color-muted-foreground)
+  ) !important;
+  stroke-width: 4.5px !important;
+  stroke-opacity: 1 !important;
+  opacity: 1 !important;
+  fill: none !important;
+  vector-effect: non-scaling-stroke !important;
+  stroke-linecap: round !important;
+  stroke-dasharray: none !important;
+}
+
+.agent-canvas-flow .react-flow__edge.chip-lod.is-active path,
+.agent-canvas-flow .react-flow__edge.chip-lod.animated path,
+.agent-canvas-flow .react-flow__edge.is-active path.chip-lod-path,
+.agent-canvas-flow .react-flow__edge.animated path.chip-lod-path {
+  stroke: color-mix(in oklab, var(--color-primary) 80%, var(--color-foreground)) !important;
+  stroke-width: 4.5px !important;
+  stroke-dasharray: 5 6 !important;
+}
+
+.agent-canvas-flow .react-flow__edge.link path {
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 45%, transparent);
+  stroke-width: 1.5px;
+}
+
+.agent-canvas-flow .react-flow__edge.selected path {
+  stroke: var(--color-primary);
+}
+
+.agent-canvas-flow .react-flow__controls {
+  display: none;
+}
+
+.agent-canvas-flow .react-flow__minimap {
+  width: 140px !important;
+  height: 90px !important;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-composer);
+  background: color-mix(in oklab, var(--color-popover) 94%, transparent) !important;
+}
+
+/* Beat RF panel defaults so zoom % sits clearly above the minimap. */
+.agent-canvas-flow .react-flow__panel.agent-canvas-zoom-panel {
+  right: 0.75rem !important;
+  bottom: calc(4rem + 90px + 1.25rem) !important;
+  margin: 0 !important;
+}
+
+.agent-canvas-flow .react-flow__minimap svg {
+  width: 140px !important;
+  height: 90px !important;
+}
+
+.agent-canvas-flow .react-flow__minimap-node {
+  fill: var(--color-muted-foreground);
+  stroke: var(--color-border);
+  rx: 2;
+  ry: 2;
+}
+
+/* Subtle viewport rectangle inside the minimap (stroke on the viewport hole). */
+.agent-canvas-flow .react-flow__minimap-mask {
+  fill: color-mix(in oklab, var(--color-foreground) 12%, transparent);
+  stroke: color-mix(in oklab, var(--color-foreground) 45%, transparent) !important;
+  stroke-width: 1.5px !important;
+}
+
+.agent-canvas-flow .react-flow__resize-control.handle {
+  width: 7px !important;
+  height: 7px !important;
+  border-radius: 2px !important;
+}
+
+/*
+ * Compact density for canvas ChatViews — IDE/Warp pane, not a scaled full-page chat.
+ * Full-page ChatView is unchanged; only `[data-chat-density=compact]` (canvas sessions).
+ */
+[data-agent-canvas-session] {
+  --chat-content-max-width: 100%;
+  --chat-lane-inset-start: 0px;
+  --chat-lane-inset-end: 0px;
+  --chat-timeline-gutter: 0px;
+  --chat-compact-pad: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[data-agent-canvas-session] > .flex {
+  min-height: 0;
+}
+
+[data-agent-canvas-session] [data-chat-column] {
+  min-height: 0;
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * Compact panes: composer is in normal flow (ChatView sets relative for compact;
+ * keep CSS as a belt-and-suspenders against absolute utilities).
+ */
+[data-agent-canvas-session] [data-chat-composer-overlay] {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  z-index: 20;
+  flex-shrink: 0;
+  /* Full-page composer carries vertical padding/min-heights that steal the timeline.
+     Keep enough room for the action row (model + send) — 3.25rem clipped the footer. */
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  /* Room for tiptap + footer action row (model + send); never clip controls. */
+  max-height: 5.75rem;
+  overflow: visible;
+}
+
+[data-agent-canvas-session] .chat-composer-lane,
+[data-agent-canvas-session] [data-chat-composer-stack] {
+  padding: 0 !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+}
+
+[data-agent-canvas-session] [data-chat-canvas],
+[data-agent-canvas-session] [data-chat-canvas] > .relative {
+  min-height: 0;
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Conversation + timeline must fill the pane; otherwise the scroller shrink-wraps
+   to content and the empty band sits OUTSIDE the scroll (above the composer).
+   Absolute fill beats nested flex/% height quirks inside React Flow nodes. */
+[data-agent-canvas-session] [data-workspace-area="conversation"] {
+  position: relative;
+  min-height: 0;
+  flex: 1 1 0%;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-agent-canvas-session] [data-assistant-citation-viewport] {
+  position: absolute;
+  inset: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+[data-agent-canvas-session][data-agent-canvas-session-active="false"] [data-chat-composer-overlay] {
+  opacity: 0.78;
+}
+
+[data-agent-canvas-session][data-agent-canvas-session-active="false"]:focus-within
+  [data-chat-composer-overlay],
+[data-agent-canvas-session][data-agent-canvas-session-active="true"] [data-chat-composer-overlay] {
+  opacity: 1;
+}
+
+/* Full width — no centered narrow column. */
+[data-chat-density="compact"] .chat-content-lane,
+[data-chat-density="compact"] [data-chat-composer-stack] {
+  margin-inline: 0 !important;
+  max-width: none !important;
+  width: 100% !important;
+}
+
+[data-chat-density="compact"] .chat-composer-lane,
+[data-chat-density="compact"][data-chat-canvas] .messages-timeline-scroll,
+[data-chat-density="compact"] .messages-timeline-scroll {
+  padding-inline: var(--chat-compact-pad) !important;
+}
+
+@media (min-width: 640px) {
+  [data-chat-density="compact"] .chat-composer-lane,
+  [data-chat-density="compact"][data-chat-canvas] .messages-timeline-scroll,
+  [data-chat-density="compact"] .messages-timeline-scroll {
+    padding-inline: var(--chat-compact-pad) !important;
+  }
+}
+
+/* Hide timeline tick/minimap gutter in compact panes. */
+[data-chat-density="compact"] [data-testid="timeline-minimap"] {
+  display: none !important;
+}
+
+[data-chat-density="compact"] .messages-timeline-scroll {
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+  /* Keep the first visible row fully below the card header / scroll clip. */
+  scroll-padding-top: 14px;
+  /* Fill the conversation pane (flex, not % height). justify-content is set in JS:
+     flex-end only for short threads — with overflow it fights scrollTop and hollows the pane. */
+  flex: 1 1 0% !important;
+  min-height: 0 !important;
+  height: auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  padding-top: 10px !important;
+  /* Soft top fade so a half-cut line under the header never reads as a hard clip. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 100%);
+}
+
+/* Flush list footers against the composer (trailing pad removed in compact footer). */
+[data-chat-density="compact"] .messages-timeline-scroll .h-3,
+[data-chat-density="compact"] .messages-timeline-scroll .h-4,
+[data-chat-density="compact"] .messages-timeline-scroll .sm\:h-4 {
+  height: 0 !important;
+  min-height: 0 !important;
+}
+
+/* Dense message rows. */
+[data-chat-density="compact"] [data-timeline-row-id] {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[data-chat-density="compact"] [data-timeline-row-id] .group\/timeline-row,
+[data-chat-density="compact"] .group\/timeline-row {
+  border-bottom-color: transparent !important;
+  padding-block: 0.15rem 0.25rem !important;
+  padding-inline-end: 0 !important;
+}
+
+[data-chat-density="compact"] [data-user-message-bubble] {
+  max-width: 100% !important;
+  width: 100% !important;
+  border-radius: 0 !important;
+  padding: 0.1rem 0 !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* Folded "Agent …" pills → dense single-line rows (no floating chrome). */
+[data-chat-density="compact"] [data-user-message-bubble] > button {
+  gap: 0.35rem !important;
+  border-radius: 0.25rem !important;
+  padding: 0.15rem 0.25rem !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  background: color-mix(in oklab, var(--color-muted) 45%, transparent) !important;
+}
+
+[data-chat-density="compact"] [data-user-message-bubble] > button svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
+}
+
+[data-chat-density="compact"] [data-user-message-attribution],
+[data-chat-density="compact"] [data-user-message-footer] {
+  display: none !important;
+}
+
+[data-chat-density="compact"] [data-user-message-body] {
+  border-inline-start: 2px solid color-mix(in oklab, var(--color-primary) 55%, transparent);
+  padding-inline-start: 0.45rem;
+  margin-inline-start: 0;
+}
+
+[data-chat-density="compact"] [data-user-message-attribution="agent"],
+[data-chat-density="compact"] .group[data-user-message-attribution="agent"] {
+  align-items: stretch !important;
+  width: 100%;
+}
+
+[data-chat-density="compact"] .prose,
+[data-chat-density="compact"] .prose p,
+[data-chat-density="compact"] .user-message-markdown,
+[data-chat-density="compact"] .assistant-message-markdown {
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+}
+
+[data-chat-density="compact"] .prose h1,
+[data-chat-density="compact"] .prose h2,
+[data-chat-density="compact"] .prose h3,
+[data-chat-density="compact"] .prose h4,
+[data-chat-density="compact"] .assistant-message-markdown h1,
+[data-chat-density="compact"] .assistant-message-markdown h2,
+[data-chat-density="compact"] .assistant-message-markdown h3,
+[data-chat-density="compact"] .assistant-message-markdown h4,
+[data-chat-density="compact"] [data-timeline-row-id] h1,
+[data-chat-density="compact"] [data-timeline-row-id] h2,
+[data-chat-density="compact"] [data-timeline-row-id] h3 {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1.35 !important;
+  margin-block: 0.25rem 0.15rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="work-toggle"] {
+  font-size: 11px !important;
+}
+
+[data-chat-density="compact"] .prose pre,
+[data-chat-density="compact"] pre,
+[data-chat-density="compact"] [data-code-block],
+[data-chat-density="compact"] .shiki {
+  margin-block: 0.15rem 0 !important;
+  padding: 0.25rem 0.4rem !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  border-radius: 4px !important;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  max-height: none !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  white-space: pre !important;
+  word-break: normal !important;
+  color: var(--color-foreground) !important;
+  background: color-mix(in oklab, var(--color-muted) 55%, transparent) !important;
+  scrollbar-width: thin;
+}
+
+[data-chat-density="compact"] .prose table {
+  font-size: 11px !important;
+  width: 100% !important;
+  margin-block: 0.25rem !important;
+}
+
+[data-chat-density="compact"] .prose th,
+[data-chat-density="compact"] .prose td {
+  padding: 0.1rem 0.25rem !important;
+  border-color: color-mix(in oklab, var(--color-border) 80%, transparent) !important;
+}
+
+/* Nested tool-group lists size to content in compact panes (no 18rem hollow). */
+[data-chat-density="compact"] [data-tool-group-scroll] {
+  max-height: none !important;
+  height: auto !important;
+}
+
+[data-chat-density="compact"] .prose code,
+[data-chat-density="compact"] code {
+  font-size: 11px !important;
+}
+
+[data-chat-density="compact"] .prose ul,
+[data-chat-density="compact"] .prose ol {
+  margin-block: 0.2rem !important;
+  padding-inline-start: 1.1rem !important;
+}
+
+[data-chat-density="compact"] .prose li {
+  margin-block: 0.05rem !important;
+}
+
+/* Tool / work folds → single-line dense rows. */
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] button,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] button,
+[data-chat-density="compact"] [data-timeline-row-kind="work-toggle"] button {
+  min-height: 1.25rem !important;
+  gap: 0.3rem !important;
+  padding-block: 0.05rem !important;
+  padding-inline: 0.15rem !important;
+  font-size: 11px !important;
+  line-height: 1.3 !important;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  border-radius: 0.2rem !important;
+}
+
+/* Collapse tool-call label ↔ meta gutters (Read …… 1 file). */
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] button > span:last-child,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] button > span:last-child {
+  margin-inline-start: 0.35rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] .ms-auto,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] .ms-auto,
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] [class*="ml-auto"],
+[data-chat-density="compact"] [data-timeline-row-kind="work"] [class*="ml-auto"] {
+  margin-inline-start: 0.5rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="fold"] svg,
+[data-chat-density="compact"] [data-timeline-row-kind="work"] svg,
+[data-chat-density="compact"] [data-timeline-row-kind="work-toggle"] svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="message"] {
+  margin-block: 0.1rem !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .group {
+  max-width: 100% !important;
+}
+
+/* Kill trailing markdown air so scrolled-to-end ink sits on the composer. */
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .prose > :last-child,
+[data-chat-density="compact"]
+  [data-timeline-row-kind="message"]
+  .assistant-message-markdown
+  > :last-child {
+  margin-bottom: 0 !important;
+}
+
+[data-chat-density="compact"] .messages-timeline-row-frame,
+[data-chat-density="compact"] [data-timeline-row-id],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] > div,
+[data-chat-density="compact"] [data-timeline-row-kind="assistant-meta"],
+[data-chat-density="compact"] [data-timeline-row-kind="working"] {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+/* Meta/copy chrome and author labels are air in a 300px pane — hide in compact. */
+[data-chat-density="compact"] [data-timeline-row-kind="assistant-meta"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .group\/assistant > .mt-1\.5,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] [class*="AssistantMessageMeta"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] button[aria-label*="Copy"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] button[aria-label*="Fork"],
+[data-chat-density="compact"] [data-timeline-row-kind="message"] button[aria-label*="Reply"] {
+  display: none !important;
+}
+
+[data-chat-density="compact"] [data-timeline-row-kind="message"] .relative.min-w-0 {
+  padding-block: 0 !important;
+}
+
+/* Artifact / fence chrome: no footer toolbar air under the last code sample. */
+[data-chat-density="compact"] [data-timeline-row-kind="message"] [data-code-block] + *,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] pre + div,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] [class*="code-block"] footer,
+[data-chat-density="compact"] [data-timeline-row-kind="message"] figure {
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+[data-chat-density="compact"]
+  [data-compact-timeline-content]
+  > :last-child
+  .messages-timeline-row-frame,
+[data-chat-density="compact"] [data-compact-timeline-content] > :last-child [data-timeline-row-id] {
+  padding-bottom: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-overlay] {
+  /* Composer surface already has its own top border; no extra air above it. */
+  border-top: 0 !important;
+}
+
+/* Compact pinned composer. */
+[data-chat-density="compact"] [data-chat-composer-surface="true"] {
+  border-radius: 0 !important;
+  border-top: 1px solid color-mix(in oklab, var(--color-border) 85%, transparent) !important;
+  box-shadow: none !important;
+  background: color-mix(in oklab, var(--color-background) 92%, var(--color-muted)) !important;
+  padding-block: 0 !important;
+  /* Defeat full-page rounded-2xl / min-height so the overlay max-height wins. */
+  min-height: 0 !important;
+  max-height: 4.75rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-overlay] form,
+[data-chat-density="compact"] .chat-composer-lane form {
+  min-height: 0 !important;
+  max-height: 4.75rem !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-surface="true"]::before,
+[data-chat-density="compact"] [data-chat-composer-surface="true"]::after {
+  display: none !important;
+}
+
+[data-chat-density="compact"] .composer-tiptap {
+  min-height: 1.25lh !important;
+  max-height: 2.5lh !important;
+  padding: 0.15rem 0.1rem !important;
+  font-size: 12px !important;
+  line-height: 1.35 !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-footer="true"],
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] {
+  gap: 0.2rem !important;
+  padding: 0.15rem 0.35rem 0.3rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] button,
+[data-chat-density="compact"] [data-chat-composer-footer="true"] button {
+  height: 1.35rem !important;
+  min-height: 1.35rem !important;
+  width: auto !important;
+  max-width: 5.5rem !important;
+  padding-inline: 0.25rem !important;
+  font-size: var(--ac-font-xs, 0.6875rem) !important;
+  border-radius: 0.25rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] button[aria-label*="Send"],
+[data-chat-density="compact"] [data-chat-composer-footer="true"] button[aria-label*="Send"],
+[data-chat-density="compact"] button[aria-label*="Send message"],
+[data-chat-density="compact"] button[aria-label*="Stop"] {
+  width: 1.35rem !important;
+  height: 1.35rem !important;
+  min-width: 1.35rem !important;
+  max-width: 1.35rem !important;
+  border-radius: 0.25rem !important;
+}
+
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] svg,
+[data-chat-density="compact"] [data-chat-composer-footer="true"] svg {
+  width: 0.75rem !important;
+  height: 0.75rem !important;
+}
+
+/* Model / mode chips stay icon-first in compact panes. */
+[data-chat-density="compact"] [data-chat-composer-controls="footer"] [data-slot="button"],
+[data-chat-density="compact"] [data-chat-composer-footer="true"] [data-slot="button"] {
+  gap: 0.2rem !important;
+}
+
+/* Quieter chrome: hide bulky banners / shoulder tabs when possible. */
+[data-chat-density="compact"] [data-composer-shoulder-tab],
+[data-chat-density="compact"] [data-chat-composer-resting-images="true"] {
+  display: none !important;
+}
+
+/* Error/provider banners become a header badge via status tone — hide the floating lane
+   so red alert icons never stack on the card's left edge or peek behind neighbors. */
+[data-agent-canvas-session] .chat-banner-lane {
+  display: none !important;
+}
+
+[data-agent-canvas-session] .chat-banner-lane > div {
+  margin-inline: 0;
+  max-width: 100%;
+  padding-top: 0.25rem;
+  width: 100%;
+}
+
+[data-agent-canvas-session] .chat-banner-lane [data-slot="alert"] {
+  gap: 0.25rem;
+  padding: 0.3rem 0.4rem;
+  box-shadow: none;
+}
+
+[data-agent-canvas-session] .chat-banner-lane [data-slot="alert-title"],
+[data-agent-canvas-session] .chat-banner-lane [data-slot="alert-description"] {
+  font-size: var(--ac-font-xs, 0.6875rem);
+  line-height: 1.3;
+}
+
+.agent-canvas-status-pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 999px;
+  background: color-mix(in oklab, currentColor 32%, transparent);
+  animation: agent-canvas-status-pulse 1.5s ease-out infinite;
+}
+
+@keyframes agent-canvas-edge-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+
+@keyframes agent-canvas-status-pulse {
+  0% {
+    opacity: 0.65;
+    transform: scale(0.85);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* Design tokens: 4px grid radii, shared chrome with notes / toolbar / minimap. */
+.agent-canvas-flow [data-agent-canvas-node] {
+  border-radius: 12px;
+}
+
+.agent-canvas-flow [data-agent-canvas-note] {
+  border-radius: 8px;
+}
+
+.agent-canvas-flow .react-flow__resize-control.line {
+  border-width: 1px;
+}
+
+.agent-canvas-flow .react-flow__node.selected [data-agent-canvas-node] {
+  outline: none;
+}
+
+/* Focus ring inside nodes must not be clipped by overflow:hidden. */
+[data-agent-canvas-session] :focus-visible {
+  outline-offset: -2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-canvas-flow .react-flow__edge.lead.animated path,
+  .agent-canvas-status-pulse::after {
+    animation: none;
+  }
+
+  .agent-canvas-flow .react-flow__node,
+  .agent-canvas-flow .react-flow__handle {
+    transition: none;
+  }
+}

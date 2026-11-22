@@ -529,6 +529,7 @@ export default defineConfig({
           "**/_generated/**",
           // Real user quotes stay verbatim.
           "apps/marketing/src/lib/tweets.ts",
+          "apps/web/src/components/agentCanvas/design-system/**",
         ],
         rules: { "t3code/no-em-dash-copy": "error" },
       },
@@ -542,8 +543,25 @@ export default defineConfig({
         rules: { "shadcn/no-raw-colors": "off" },
       },
       {
+        // Canvas design-system: --ac-* tokens, English craft/gallery labels, demo handlers.
+        files: ["apps/web/src/components/agentCanvas/design-system/**"],
+        rules: {
+          "shadcn/no-arbitrary-values": "off",
+          "shadcn/no-unknown-classes": "off",
+          "shadcn/require-static-classes": "off",
+          "shadcn/no-restyle": "off",
+          "t3code/no-untranslated-copy": "off",
+          "t3code/no-em-dash-copy": "off",
+          "t3code/no-manual-memo": "off",
+          "t3code/no-native-title-tooltip": "off",
+        },
+      },
+      {
         files: ["apps/web/src/**"],
-        excludeFiles: ["apps/web/src/components/ui/**"],
+        excludeFiles: [
+          "apps/web/src/components/ui/**",
+          "apps/web/src/components/agentCanvas/design-system/**",
+        ],
         rules: {
           "shadcn/require-static-classes": "error",
           "shadcn/no-arbitrary-values": [
@@ -595,12 +613,14 @@ export default defineConfig({
           "**/{test-fixtures,*TestFixtures}.ts",
           "apps/mobile/src/features/development/**",
           "packages/client-runtime/src/rpc/**",
+          "apps/web/src/components/agentCanvas/design-system/**",
         ],
         rules: { "t3code/no-untranslated-copy": "error" },
       },
       {
         // React Compiler owns memoization; upstream rules do not ban redundant useMemo/useCallback.
         files: ["apps/web/src/**/*.{ts,tsx}"],
+        excludeFiles: ["apps/web/src/components/agentCanvas/design-system/**"],
         rules: {
           "react/exhaustive-effect-dependencies": "error",
           "react/globals": "error",

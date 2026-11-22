@@ -6,6 +6,8 @@ import { resolveChatCanvasModel, type ChatCanvasStore } from "./canvasStore";
 import { selectThreadPanelOpen, useRightPanelStore } from "../../rightPanelStore";
 import { observeResize } from "../../lib/observeResize";
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { useChatDensity } from "./chatDensity";
+import { cn } from "../../lib/utils";
 
 function panelWidthTransitions(element: HTMLElement) {
   const panels = element
@@ -158,26 +160,33 @@ export function ChatCanvas({
     detailsCardPlacement: model.detailsCardPlacement,
   };
   const { layout } = context;
+  const density = useChatDensity();
+  const compact = density === "compact";
   return (
     <ChatCanvasContext value={context}>
       <div
         {...props}
         ref={elementRef}
         data-chat-canvas
+        data-chat-density={density}
         data-preview-overlaps-chat={layout.overlapsChat || undefined}
         className="relative flex min-h-0 min-w-0 flex-1 flex-col"
         style={
           {
-            "--chat-timeline-gutter": `${measurements.timelineGutter}px`,
-            "--chat-lane-inset-start": `${layout.chat.insetStart}px`,
-            "--chat-lane-inset-end": `${layout.chat.insetEnd}px`,
+            "--chat-timeline-gutter": compact ? "0px" : `${measurements.timelineGutter}px`,
+            "--chat-lane-inset-start": compact ? "0px" : `${layout.chat.insetStart}px`,
+            "--chat-lane-inset-end": compact ? "0px" : `${layout.chat.insetEnd}px`,
+            ...(compact ? { "--chat-content-max-width": "100%" } : {}),
           } as CSSProperties
         }
       >
         <div
           ref={widthProbeRef}
           aria-hidden
-          className="pointer-events-none invisible absolute h-0 w-(--chat-content-max-width) min-w-[40rem] box-content ps-3 sm:ps-12"
+          className={cn(
+            "pointer-events-none invisible absolute h-0 w-(--chat-content-max-width) box-content",
+            compact ? "min-w-0 ps-0" : "min-w-[40rem] ps-3 sm:ps-12",
+          )}
         />
         {children}
       </div>

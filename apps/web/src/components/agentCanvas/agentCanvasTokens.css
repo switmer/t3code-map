@@ -1,0 +1,168 @@
+/* Agent Canvas design tokens — aliases of the app theme; no forked hex. */
+[data-agent-canvas],
+.agent-canvas-ds {
+  /* Spacing (4px scale, same as Tailwind spacing) */
+  --ac-space-0: 0px;
+  --ac-space-1: 4px;
+  --ac-space-2: 8px;
+  --ac-space-3: 12px;
+  --ac-space-4: 16px;
+  --ac-space-5: 24px;
+  --ac-space-6: 32px;
+
+  /* Radius — app radius scale */
+  --ac-radius-sm: var(--radius-sm);
+  --ac-radius-md: var(--radius-md);
+  --ac-radius-lg: var(--radius-lg);
+  --ac-radius-xl: var(--radius-xl);
+
+  /* Surfaces */
+  --ac-surface-0: var(--color-background);
+  --ac-surface-1: var(--color-card);
+  --ac-surface-2: color-mix(in oklab, var(--color-popover) 92%, var(--color-muted));
+  --ac-surface-3: color-mix(in oklab, var(--color-muted) 55%, transparent);
+  --ac-surface-elevated: var(--color-popover);
+
+  /* Borders */
+  --ac-border-subtle: color-mix(in oklab, var(--color-border) 65%, transparent);
+  --ac-border-default: var(--color-border);
+  --ac-border-strong: color-mix(in oklab, var(--color-foreground) 22%, var(--color-border));
+  --ac-border-focus: var(--color-ring);
+
+  /* Text tiers */
+  --ac-text-primary: var(--color-foreground);
+  --ac-text-secondary: var(--color-muted-foreground);
+  --ac-text-tertiary: color-mix(in oklab, var(--color-muted-foreground) 72%, transparent);
+  --ac-text-muted: color-mix(in oklab, var(--color-muted-foreground) 55%, transparent);
+  --ac-text-inverse: var(--color-primary-foreground);
+
+  /* Accent */
+  --ac-accent: var(--color-primary);
+  --ac-accent-muted: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  --ac-accent-foreground: var(--color-primary-foreground);
+
+  /* Status semantic */
+  --ac-status-running: var(--color-success);
+  --ac-status-running-surface: color-mix(in oklab, var(--color-success) 14%, transparent);
+  --ac-status-waiting: var(--color-warning);
+  --ac-status-waiting-surface: var(--color-warning-surface);
+  --ac-status-failed: var(--color-destructive);
+  --ac-status-failed-surface: var(--color-error-surface);
+  --ac-status-done: var(--color-success);
+  --ac-status-done-surface: color-mix(in oklab, var(--color-success) 10%, transparent);
+  --ac-status-idle: color-mix(in oklab, var(--color-muted-foreground) 50%, transparent);
+  --ac-status-idle-surface: color-mix(in oklab, var(--color-muted) 40%, transparent);
+  --ac-status-ready: color-mix(in oklab, var(--color-muted-foreground) 38%, transparent);
+  --ac-status-ready-surface: color-mix(in oklab, var(--color-muted) 35%, transparent);
+
+  /* Roles */
+  --ac-role-lead: var(--color-primary);
+  --ac-role-lead-surface: color-mix(in oklab, var(--color-primary) 12%, transparent);
+  --ac-role-coordinator: var(--color-accent-foreground);
+  --ac-role-coordinator-surface: color-mix(in oklab, var(--color-accent) 85%, transparent);
+  --ac-role-worker: var(--color-muted-foreground);
+  --ac-role-worker-surface: var(--color-muted);
+
+  /* Edges */
+  --ac-edge-idle: color-mix(in oklab, var(--color-muted-foreground) 42%, transparent);
+  --ac-edge-active: color-mix(in oklab, var(--color-primary) 72%, var(--color-muted-foreground));
+  --ac-edge-broadcast: color-mix(in oklab, var(--color-warning) 65%, var(--color-muted-foreground));
+  --ac-edge-dependency: color-mix(in oklab, var(--color-info) 58%, var(--color-muted-foreground));
+
+  /*
+   * Shadows — match sidebar/popover restraint (shadow-sm/5, shadow-composer).
+   * No floaty multi-layer drops.
+   */
+  --ac-shadow-0: none;
+  --ac-shadow-1: var(--shadow-composer, 0 1px 2px rgb(0 0 0 / 5%));
+  --ac-shadow-2: 0 1px 2px rgb(0 0 0 / 6%);
+  --ac-shadow-3: 0 1px 3px rgb(0 0 0 / 8%);
+  --ac-shadow-4: 0 2px 6px -1px rgb(0 0 0 / 10%);
+  --ac-shadow-focus: 0 0 0 2px color-mix(in oklab, var(--color-ring) 35%, transparent);
+
+  /*
+   * Type ramp — app sizes only (no 10px / 0.625rem as a general UI size).
+   * xs → text-2xs (11px), sm → text-xs (12px), md → 13px, base → text-sm (14px), lg → 16px.
+   */
+  --ac-font-xs: var(--text-2xs, 0.6875rem);
+  --ac-font-sm: var(--text-xs, 0.75rem);
+  --ac-font-md: 0.8125rem;
+  --ac-font-base: var(--text-sm, 0.875rem);
+  --ac-font-lg: var(--text-base, 1rem);
+  --ac-font-weight-normal: 400;
+  --ac-font-weight-medium: 500;
+  --ac-font-weight-semibold: 600;
+  --ac-line-tight: 1.25;
+  --ac-line-snug: 1.35;
+  --ac-line-normal: 1.5;
+  /* Follow appearanceFonts --font-mono (never hardcode ui-monospace alone). */
+  --ac-font-mono: var(--font-mono);
+  --ac-font-composer: var(--font-composer, var(--font-sans));
+  /* Compact code tracks the user's code size setting. */
+  --ac-font-code: calc(var(--font-size-code, var(--text-xs)) * 0.92);
+  --ac-font-diff: calc(var(--diffs-font-size, var(--font-size-code, var(--text-xs))) * 0.92);
+
+  /* Motion — drawer ease from the app theme where it fits */
+  --ac-duration-instant: 80ms;
+  --ac-duration-fast: 120ms;
+  --ac-duration-normal: 200ms;
+  --ac-duration-slow: 320ms;
+  --ac-duration-stream: 2s;
+  --ac-ease-hover: cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ac-ease-focus: cubic-bezier(0.2, 0, 0, 1);
+  --ac-ease-stream: ease-in-out;
+  --ac-ease-lod: var(--ease-drawer, cubic-bezier(0.32, 0.72, 0, 1));
+
+  /* Z-index */
+  --ac-z-base: 1;
+  --ac-z-raised: 5;
+  --ac-z-overlay: 8;
+  --ac-z-toolbar: 12;
+  --ac-z-modal: 20;
+}
+
+.agent-canvas-ds .ac-type-mono {
+  font-family: var(--ac-font-mono);
+  font-size: var(--ac-font-code);
+  line-height: var(--ac-line-snug);
+}
+
+.agent-canvas-ds .ac-type-composer {
+  font-family: var(--ac-font-composer);
+  font-size: var(--ac-font-sm);
+  line-height: var(--ac-line-normal);
+}
+
+.agent-canvas-ds .ac-status-pulse {
+  animation: ac-status-pulse var(--ac-duration-stream) var(--ac-ease-stream) infinite;
+}
+
+@keyframes ac-status-pulse {
+  0%,
+  70%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  85% {
+    opacity: 0.55;
+    transform: scale(0.92);
+  }
+}
+
+.agent-canvas-ds .ac-stream-cursor::after {
+  content: "";
+  display: inline-block;
+  width: var(--ac-space-1);
+  height: 1em;
+  margin-inline-start: var(--ac-space-1);
+  vertical-align: text-bottom;
+  background: var(--ac-accent);
+  animation: ac-stream-blink var(--ac-duration-stream) step-end infinite;
+}
+
+@keyframes ac-stream-blink {
+  50% {
+    opacity: 0;
+  }
+}
