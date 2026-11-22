@@ -21,7 +21,8 @@ export const AGENT_CANVAS_INTERACTIVE_ZOOM = 0.55;
 const NODE_GAP_X = 72;
 const NODE_GAP_Y = 56;
 const COLUMNS = 3;
-const LEAD_TO_WORKER_GAP_X = 72;
+/** Wide enough that chip LOD (≈28%) still shows a clear lead→worker connector. */
+const LEAD_TO_WORKER_GAP_X = 240;
 const WORKER_STACK_GAP_Y = 24;
 const WORKER_GRID_GAP_X = 40;
 const WORKER_GRID_GAP_Y = 24;
@@ -39,11 +40,22 @@ export const AGENT_CANVAS_FIT_CHROME = {
   left: 40,
 } as const;
 
+/** Narrow phones: 12px gutters, no minimap — frame the lead card fully. */
+const AGENT_CANVAS_NARROW_FIT_CHROME = {
+  top: 56,
+  right: 12,
+  bottom: 100,
+  left: 12,
+} as const;
+
 /**
  * Default fit prefers a readable interactive zoom framing the lead cluster,
  * letting distant workers sit off-screen rather than shrinking everything.
  */
 export const AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM = 0.85;
+
+/** Viewport width below which we frame only the lead card. */
+export const AGENT_CANVAS_NARROW_VIEWPORT = 720;
 
 export function agentFlowId(threadKey: string): string {
   return `agent:${threadKey}`;
@@ -303,6 +315,40 @@ export function preferredFitLayouts(
   return [...layouts]
     .sort((a, b) => a.y - b.y || a.x - b.x)
     .slice(0, Math.min(layouts.length, maxWorkers + 1));
+}
+
+/**
+ * Narrow viewport fit: frame the lead card fully inside 12px gutters, centered
+ * horizontally. Zoom shrinks the card so its on-screen width equals the
+ * guttered viewport (workers stay off-screen and reachable by pan).
+ */
+export function computeNarrowLeadFit(
+  lead: {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  },
+  viewport: { readonly width: number; readonly height: number },
+  gutter = 12,
+): AgentCanvasView {
+  const chrome = {
+    top: AGENT_CANVAS_NARROW_FIT_CHROME.top,
+    right: gutter,
+    bottom: AGENT_CANVAS_NARROW_FIT_CHROME.bottom,
+    left: gutter,
+  };
+  const availW = Math.max(1, viewport.width - chrome.left - chrome.right);
+  const availH = Math.max(1, viewport.height - chrome.top - chrome.bottom);
+  // Never floor zoom — a floor would clip the lead on narrow phones.
+  const zoom = Math.min(1, availW / Math.max(1, lead.width), availH / Math.max(1, lead.height));
+  const usedW = lead.width * zoom;
+  const usedH = lead.height * zoom;
+  return {
+    x: chrome.left + (availW - usedW) / 2 - lead.x * zoom,
+    y: chrome.top + Math.max(0, (availH - usedH) / 2) - lead.y * zoom,
+    zoom,
+  };
 }
 
 export function isNodeOnScreen(

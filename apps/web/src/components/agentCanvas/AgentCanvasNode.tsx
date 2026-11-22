@@ -139,12 +139,18 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
 
   const workers = workerKeysForLead(threadKey, edges);
 
-  const handleGeometryKey = `${data.role}:${workers.length}:${lod}`;
-  // Keep React Flow handle positions in sync when fan count / role / LOD changes.
+  const handleGeometryKey = `${data.role}:${workers.length}:${lod}:${data.chipScreenWidth ?? 0}:${data.chipScreenHeight ?? 0}:${data.zoom}`;
+  // Keep React Flow handle positions in sync when fan count / role / LOD / size changes.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- syncs handle geometry with React Flow internals
   useEffect(() => {
     if (handleGeometryKey.length === 0) return;
     updateNodeInternals(id);
+    // Chip LOD swaps node size — RF needs a post-layout pass or edges drop.
+    const raf = window.requestAnimationFrame(() => {
+      updateNodeInternals(id);
+      window.setTimeout(() => updateNodeInternals(id), 32);
+    });
+    return () => window.cancelAnimationFrame(raf);
   }, [updateNodeInternals, id, handleGeometryKey]);
 
   const cardState =
@@ -161,8 +167,10 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
               : "default";
 
   // Handles must exist at every LOD so lead→worker edges stay visible when zoomed out.
-  // Chip/preview keep them invisible; interactive keeps the prior chrome.
-  const handleChrome = lod === "interactive" ? "" : "!opacity-0 !pointer-events-none";
+  // Keep a real 8×8 hit target (opacity 0) — zero-size handles break edge geometry.
+  // Chip LOD sizes the RF node to the chip footprint, so default Left/Right attach correctly.
+  const handleChrome =
+    lod === "interactive" ? "" : "!opacity-0 !pointer-events-none !size-2 !min-w-2 !min-h-2";
   const connectionHandles = (
     <>
       <Handle
@@ -170,6 +178,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         position={Position.Left}
         id="in"
         className={cn("!-left-1 !top-1/2", handleChrome)}
+        style={{ top: "50%", transform: "translate(-50%, -50%)" }}
       />
       <Handle
         type="target"
@@ -185,7 +194,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
           id={handleId}
           className={cn("!-right-1", handleChrome)}
           style={{
-            top: leadHandleTopPercent(index),
+            top: lod === "chip" ? `${20 + index * 15}%` : leadHandleTopPercent(index),
             transform: "translate(50%, -50%)",
           }}
         />
@@ -195,6 +204,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
         position={Position.Right}
         id="out"
         className={cn("!-right-1", handleChrome)}
+        style={{ top: "50%", transform: "translate(50%, -50%)" }}
       />
       <Handle
         type="source"

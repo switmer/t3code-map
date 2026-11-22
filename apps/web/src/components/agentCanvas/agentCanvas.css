@@ -82,34 +82,76 @@
 }
 
 .agent-canvas-flow .react-flow__edge {
-  z-index: 1;
+  z-index: 6;
+}
+
+.agent-canvas-flow .react-flow__edges {
+  z-index: 6;
+}
+
+/* Chip LOD connectors sit above layout-sized node boxes so short gaps stay visible. */
+.agent-canvas-flow .react-flow__edge.chip-lod {
+  z-index: 1000 !important;
+}
+
+.agent-canvas-flow .react-flow__edges:has(.chip-lod) {
+  z-index: 1000;
+}
+
+/* Screen-pixel strokes so chip LOD (28%) edges stay visible (no sub-pixel hairlines). */
+.agent-canvas-flow .react-flow__edge-path,
+.agent-canvas-flow .react-flow__edge path {
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
 }
 
 .agent-canvas-flow .react-flow__edge.lead path {
-  stroke: color-mix(in oklab, var(--color-muted-foreground) 48%, transparent);
-  stroke-width: 1.15;
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 70%, transparent);
+  stroke-width: 2px;
   stroke-dasharray: none !important;
 }
 
 .agent-canvas-flow .react-flow__edge.lead.is-active path,
 .agent-canvas-flow .react-flow__edge.lead.animated path {
   stroke: color-mix(in oklab, var(--color-primary) 72%, var(--color-muted-foreground));
-  stroke-width: 1.35;
+  stroke-width: 2.25px;
   stroke-dasharray: 4 5 !important;
   animation: agent-canvas-edge-flow 1.1s linear infinite;
 }
 
+/* Chip LOD: beat Tailwind [stroke]/[stroke-width] utilities — must stay clearly visible at 28%. */
+.agent-canvas-flow .react-flow__edge.chip-lod path,
+.agent-canvas-flow .react-flow__edge path.chip-lod-path {
+  stroke: color-mix(
+    in oklab,
+    var(--color-foreground) 78%,
+    var(--color-muted-foreground)
+  ) !important;
+  stroke-width: 4.5px !important;
+  stroke-opacity: 1 !important;
+  opacity: 1 !important;
+  fill: none !important;
+  vector-effect: non-scaling-stroke !important;
+  stroke-linecap: round !important;
+  stroke-dasharray: none !important;
+}
+
+.agent-canvas-flow .react-flow__edge.chip-lod.is-active path,
+.agent-canvas-flow .react-flow__edge.chip-lod.animated path,
+.agent-canvas-flow .react-flow__edge.is-active path.chip-lod-path,
+.agent-canvas-flow .react-flow__edge.animated path.chip-lod-path {
+  stroke: color-mix(in oklab, var(--color-primary) 80%, var(--color-foreground)) !important;
+  stroke-width: 4.5px !important;
+  stroke-dasharray: 5 6 !important;
+}
+
 .agent-canvas-flow .react-flow__edge.link path {
-  stroke: color-mix(in oklab, var(--color-muted-foreground) 34%, transparent);
-  stroke-width: 1.1;
+  stroke: color-mix(in oklab, var(--color-muted-foreground) 45%, transparent);
+  stroke-width: 1.5px;
 }
 
 .agent-canvas-flow .react-flow__edge.selected path {
   stroke: var(--color-primary);
-}
-
-.agent-canvas-flow .react-flow__edge-path {
-  stroke-linecap: round;
 }
 
 .agent-canvas-flow .react-flow__controls {
@@ -281,8 +323,7 @@
   scrollbar-gutter: auto;
   scrollbar-width: thin;
   /* Keep the first visible row fully below the card header / scroll clip. */
-  scroll-padding-top: var(--ac-space-2, 8px);
-  padding-top: var(--ac-space-1, 4px);
+  scroll-padding-top: 14px;
   /* Fill the conversation pane (flex, not % height). justify-content is set in JS:
      flex-end only for short threads — with overflow it fights scrollTop and hollows the pane. */
   flex: 1 1 0% !important;
@@ -290,7 +331,10 @@
   height: auto !important;
   display: flex !important;
   flex-direction: column !important;
-  padding-top: 0 !important;
+  padding-top: 10px !important;
+  /* Soft top fade so a half-cut line under the header never reads as a hard clip. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 12px, #000 100%);
 }
 
 /* Flush list footers against the composer (trailing pad removed in compact footer). */

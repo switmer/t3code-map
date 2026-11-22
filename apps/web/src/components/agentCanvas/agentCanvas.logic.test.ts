@@ -8,6 +8,7 @@ import {
   agentFlowId,
   clampAgentNodeLayout,
   computeFitViewport,
+  computeNarrowLeadFit,
   defaultAgentNodeLayout,
   defaultWorkerLayoutForLead,
   isNodeFullyFramed,
@@ -61,7 +62,7 @@ describe("agent canvas layout", () => {
     const lead = { x: 40, y: 80, width: 400, height: 360 };
     const first = defaultWorkerLayoutForLead(lead, 0, 2);
     const second = defaultWorkerLayoutForLead(lead, 1, 2);
-    expect(first.x).toBe(lead.x + lead.width + 72);
+    expect(first.x).toBe(lead.x + lead.width + 240);
     expect(second.x).toBe(first.x);
     expect(second.y).toBeGreaterThan(first.y + first.height);
   });
@@ -218,9 +219,23 @@ describe("agent canvas layout", () => {
     expect(tight.flowWidth).toBeLessThanOrEqual(480);
     expect(tight.flowHeight).toBeLessThanOrEqual(260);
     expect(tight.screenWidth).toBeLessThanOrEqual(200);
+    // Wide layouts still leave connector room (≤72% of footprint) before the 200px cap.
     const wide = chipSizeForLayout(0.28, { width: 900, height: 700 });
-    expect(wide.screenWidth).toBe(200);
-    expect(wide.flowWidth).toBeCloseTo(200 / 0.28, 5);
+    expect(wide.screenWidth).toBeCloseTo(Math.min(200, 900 * 0.28 * 0.72), 5);
+    expect(wide.flowWidth).toBeCloseTo(wide.screenWidth / 0.28, 5);
+    expect(wide.flowWidth).toBeLessThanOrEqual(900);
+  });
+
+  it("frames the lead card fully on a narrow phone viewport", () => {
+    const lead = { x: 80, y: 96, width: 640, height: 680 };
+    const viewport = { width: 430, height: 900 };
+    const view = computeNarrowLeadFit(lead, viewport);
+    const left = lead.x * view.zoom + view.x;
+    const right = (lead.x + lead.width) * view.zoom + view.x;
+    expect(left).toBeGreaterThanOrEqual(12 - 0.5);
+    expect(right).toBeLessThanOrEqual(viewport.width - 12 + 0.5);
+    expect(right - left).toBeLessThanOrEqual(viewport.width - 24 + 0.5);
+    expect(view.zoom).toBeLessThan(0.85);
   });
 
   it("spreads lead handles evenly for fan edges", () => {

@@ -53,7 +53,7 @@ import {
 import { useHandleNewThread } from "../../hooks/useHandleNewThread";
 import { useThreadRouteTarget } from "../../hooks/useThreadRouteTarget";
 import { observeResize } from "../../lib/observeResize";
-import { newMessageId } from "../../lib/utils";
+import { cn, newMessageId } from "../../lib/utils";
 import { useVisibleThreadShells } from "../../state/entities";
 import { threadEnvironment } from "../../state/threads";
 import { useOrchestrationCommand } from "../../state/use-orchestration-command";
@@ -83,9 +83,11 @@ import {
 import {
   AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
   AGENT_CANVAS_INTERACTIVE_ZOOM,
+  AGENT_CANVAS_NARROW_VIEWPORT,
   agentCanvasLod,
   agentFlowId,
   computeFitViewport,
+  computeNarrowLeadFit,
   createNoteId,
   defaultNotePlacement,
   defaultWorkerLayoutForLead,
@@ -106,6 +108,7 @@ import {
   threadNeedsAttention,
   workerKeysForLead,
 } from "./agentCanvas.logic";
+import { COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS } from "../../workspaceTitlebar";
 import { AgentCanvasLeadEdge } from "./AgentCanvasLeadEdge";
 import { AgentCanvasNode, type AgentCanvasAgentFlowNode } from "./AgentCanvasNode";
 import { AgentCanvasNoteNode, type AgentCanvasNoteFlowNode } from "./AgentCanvasNoteNode";
@@ -127,11 +130,13 @@ function toFlowEdge(input: {
   readonly animated: boolean;
   readonly sourceHandle?: string;
   readonly fanIndex?: number;
+  readonly omitMarker?: boolean;
 }): Edge {
   const { edge, animated } = input;
   const sourceHandle = input.sourceHandle ?? edge.sourceHandle;
+  const chipLod = Boolean(input.omitMarker);
   // React Flow edge markers styled in agentCanvas.css (not Tailwind utilities).
-  const className = `${edge.kind === "lead" ? "lead" : "link"}${animated ? " is-active" : ""}`;
+  const className = `${edge.kind === "lead" ? "lead" : "link"}${animated ? " is-active" : ""}${chipLod ? " chip-lod" : ""}`;
   const fanIndex = input.fanIndex;
   const next: Edge = {
     id: edge.id,
@@ -140,16 +145,24 @@ function toFlowEdge(input: {
     type: edge.kind === "lead" ? "agentLead" : "default",
     className,
     animated,
-    markerEnd: {
-      type: MarkerType.ArrowClosed,
-      width: 14,
-      height: 14,
-      color: animated
-        ? "color-mix(in oklab, var(--color-primary) 88%, transparent)"
-        : "color-mix(in oklab, var(--color-muted-foreground) 70%, transparent)",
-    },
+    // Keep chip-LOD connectors above the layout-sized node hit boxes.
+    ...(chipLod ? { zIndex: 1000 } : {}),
+    // Arrowheads at chip LOD read as floating stubs on short gaps — omit them.
+    ...(chipLod
+      ? {}
+      : {
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 14,
+            height: 14,
+            color: animated
+              ? "color-mix(in oklab, var(--color-primary) 88%, transparent)"
+              : "color-mix(in oklab, var(--color-muted-foreground) 70%, transparent)",
+          },
+        }),
     data: {
       kind: edge.kind,
+      chipLod,
       ...(fanIndex !== undefined ? { fanIndex } : {}),
     },
   };
@@ -194,6 +207,9 @@ function AgentCanvasFlow() {
   const { setViewport, screenToFlowPosition } = useReactFlow();
 
   const view = useAgentCanvasStore((state) => state.view);
+  // Gesture zoom overrides the persisted view while the user is mid-pan/zoom.
+  const [gestureZoom, setGestureZoom] = useState<number | null>(null);
+  const liveZoom = gestureZoom ?? view.zoom;
   const agents = useAgentCanvasStore((state) => state.agents);
   const notes = useAgentCanvasStore((state) => state.notes);
   const edges = useAgentCanvasStore((state) => state.edges);
@@ -236,9 +252,33 @@ function AgentCanvasFlow() {
     if (surface === null) return;
     return observeResize(surface, ([entry]) => {
       if (!entry) return;
-      setViewportSize({ width: entry.contentRect.width, height: entry.contentRect.height });
+      const next = { width: entry.contentRect.width, height: entry.contentRect.height };
+      setViewportSize((prev) => {
+        // Crossing the phone breakpoint must re-frame so the lead isn't left clipped.
+        const wasNarrow = (prev?.width ?? next.width) < AGENT_CANVAS_NARROW_VIEWPORT;
+        const isNarrow = next.width < AGENT_CANVAS_NARROW_VIEWPORT;
+        if (wasNarrow !== isNarrow) framedScene.current = false;
+        return next;
+      });
     });
   }, [surface]);
+
+  // Shot / Playwright helper: apply a viewport without fighting autofit.
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- listens for screenshot-script CustomEvents on the surface
+  useEffect(() => {
+    if (surface === null) return;
+    const onSetView = (event: Event) => {
+      const detail = (event as CustomEvent<{ x: number; y: number; zoom: number }>).detail;
+      if (!detail || typeof detail.zoom !== "number") return;
+      framedScene.current = true;
+      setGestureZoom(null);
+      void setViewport(detail, { duration: 0 }).then(() => {
+        setView(detail);
+      });
+    };
+    surface.addEventListener("t3-agent-canvas-set-view", onSetView);
+    return () => surface.removeEventListener("t3-agent-canvas-set-view", onSetView);
+  }, [setView, setViewport, surface]);
 
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- wait for zustand persist before framing
   useEffect(() => {
@@ -321,12 +361,20 @@ function AgentCanvasFlow() {
       .filter((entry) => isInCanvasScene(entry.layout));
     if (sceneLayouts.length === 0) return;
     framedScene.current = true;
-    const narrow = viewportSize.width < 720;
+    const narrow = viewportSize.width < AGENT_CANVAS_NARROW_VIEWPORT;
     const focusLayouts = preferredFitLayouts(
       sceneLayouts.map((entry) => entry.fit),
       edges,
       narrow ? 0 : 3,
     );
+    const leadLayout = focusLayouts[0] ?? sceneLayouts[0]?.fit;
+    if (narrow && leadLayout) {
+      const cleared = computeNarrowLeadFit(leadLayout, viewportSize);
+      void setViewport(cleared, { duration: 0 }).then(() => {
+        setView(cleared);
+      });
+      return;
+    }
     if (
       view.zoom >= AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM &&
       isSceneClearOfChrome(
@@ -523,14 +571,16 @@ function AgentCanvasFlow() {
       const threadKey = scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id));
       const layout = resolveAgentNodeLayout(index, agents[threadKey]);
       const focused = focusedKey === threadKey;
-      const onScreen = viewportSize === null ? true : isNodeOnScreen(layout, view, viewportSize);
-      const lod = agentCanvasLod({ focused, onScreen, zoom: view.zoom });
+      const liveView = { ...view, zoom: liveZoom };
+      const onScreen =
+        viewportSize === null ? true : isNodeOnScreen(layout, liveView, viewportSize);
+      const lod = agentCanvasLod({ focused, onScreen, zoom: liveZoom });
       const workerCount = workerKeysForLead(threadKey, edges).length;
-      // Chip LOD: clamp screen size to the layout footprint (top-left anchored).
-      // Never rewrite position — RF would persist it and park agents off-scene.
-      const chip = lod === "chip" ? chipSizeForLayout(view.zoom, layout) : null;
+      // Chip LOD: size the RF node to the chip footprint so Left/Right handles
+      // sit on the visible chrome (layout-sized nodes left edges floating above chips).
+      const chip = lod === "chip" ? chipSizeForLayout(liveZoom, layout) : null;
       const width = chip ? chip.flowWidth : layout.width;
-      const height = chip ? chip.flowHeight : lod === "interactive" ? layout.height : undefined;
+      const height = chip ? chip.flowHeight : lod === "preview" ? undefined : layout.height;
       return {
         id: agentFlowId(threadKey),
         type: "agent" as const,
@@ -545,7 +595,7 @@ function AgentCanvasFlow() {
           thread,
           role: layout.role,
           lod,
-          zoom: view.zoom,
+          zoom: liveZoom,
           ...(chip
             ? {
                 chipScreenWidth: chip.screenWidth,
@@ -564,22 +614,21 @@ function AgentCanvasFlow() {
       } satisfies AgentCanvasAgentFlowNode;
     }),
     ...Object.values(notes).map((note) => {
+      const liveView = { ...view, zoom: liveZoom };
       const noteLod = agentCanvasLod({
         focused: false,
-        onScreen: viewportSize === null ? true : isNodeOnScreen(note, view, viewportSize),
-        zoom: view.zoom,
+        onScreen: viewportSize === null ? true : isNodeOnScreen(note, liveView, viewportSize),
+        zoom: liveZoom,
       });
-      // Notes sit above the cluster — allow a readable chip wider than the
-      // raw sticky bounds so the first line isn't a 2-character smudge.
       const chip =
         noteLod === "chip"
-          ? chipSizeForLayout(view.zoom, {
-              width: Math.max(note.width, 200 / Math.max(view.zoom, 0.15)),
-              height: Math.max(note.height, 36 / Math.max(view.zoom, 0.15)),
+          ? chipSizeForLayout(liveZoom, {
+              width: Math.max(note.width, 200 / Math.max(liveZoom, 0.15)),
+              height: Math.max(note.height, 36 / Math.max(liveZoom, 0.15)),
             })
           : null;
-      const width = chip ? chip.flowWidth : note.width;
-      const height = chip ? chip.flowHeight : note.height;
+      const width = note.width;
+      const height = note.height;
       return {
         id: noteFlowId(note.id),
         type: "note" as const,
@@ -592,7 +641,7 @@ function AgentCanvasFlow() {
           noteId: note.id,
           text: note.text,
           lod: noteLod,
-          zoom: view.zoom,
+          zoom: liveZoom,
           ...(chip
             ? {
                 chipScreenWidth: chip.screenWidth,
@@ -646,27 +695,31 @@ function AgentCanvasFlow() {
       const index = ordered.indexOf(edge.target);
       if (index >= 0) {
         fanIndex = index;
-        sourceHandle = leadSourceHandleForIndex(index, ordered.length);
+        // Chip LOD: single mid-edge outlets so paths stay lead→right / worker→left.
+        sourceHandle = liveZoom < 0.4 ? "out" : leadSourceHandleForIndex(index, ordered.length);
       }
     }
+    const omitMarker = liveZoom < 0.4;
     // Lead edges: fan sourceHandles + fanIndex so AgentCanvasLeadEdge can spread origins.
     if (edge.kind === "lead") {
       return fanIndex === undefined
         ? toFlowEdge({
             edge,
             animated: Boolean(edgeActive),
+            omitMarker,
             ...(sourceHandle !== undefined ? { sourceHandle } : {}),
           })
         : toFlowEdge({
             edge,
             animated: Boolean(edgeActive),
             fanIndex,
+            omitMarker,
             ...(sourceHandle !== undefined ? { sourceHandle } : {}),
           });
     }
     return sourceHandle === undefined
-      ? toFlowEdge({ edge, animated: Boolean(edgeActive) })
-      : toFlowEdge({ edge, animated: Boolean(edgeActive), sourceHandle });
+      ? toFlowEdge({ edge, animated: Boolean(edgeActive), omitMarker })
+      : toFlowEdge({ edge, animated: Boolean(edgeActive), sourceHandle, omitMarker });
   });
 
   const beginHistoryGesture = () => {
@@ -686,17 +739,24 @@ function AgentCanvasFlow() {
       if (agentKey !== null) {
         const previous = agents[agentKey] ?? resolveAgentNodeLayout(0, undefined);
         const layout = toStoreLayout(node, previous);
+        // Chip/preview LOD temporarily sizes the RF node for handle geometry —
+        // never persist those ephemeral dimensions into the layout store.
+        const lod = node.data?.lod;
+        const nextLayout =
+          lod === "chip" || lod === "preview"
+            ? { ...layout, width: previous.width, height: previous.height }
+            : layout;
         if (
-          previous.x === layout.x &&
-          previous.y === layout.y &&
-          previous.width === layout.width &&
-          previous.height === layout.height &&
-          previous.role === layout.role
+          previous.x === nextLayout.x &&
+          previous.y === nextLayout.y &&
+          previous.width === nextLayout.width &&
+          previous.height === nextLayout.height &&
+          previous.role === nextLayout.role
         ) {
           continue;
         }
         beginHistoryGesture();
-        setAgentLayout(agentKey, layout);
+        setAgentLayout(agentKey, nextLayout);
         continue;
       }
       const noteId = parseNoteFlowId(node.id);
@@ -826,13 +886,29 @@ function AgentCanvasFlow() {
     });
   };
 
+  const onMove = (_event: unknown, viewport: Viewport) => {
+    setGestureZoom(viewport.zoom);
+  };
+
   const onMoveEnd = (_event: unknown, viewport: Viewport) => {
+    setGestureZoom(null);
     setView({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
   };
 
   const createOnCanvas = async () => {
     if (defaultProjectRef === null) return;
-    await handleNewThread(defaultProjectRef);
+    const created = await handleNewThread(defaultProjectRef);
+    if (created === null) return;
+    const key = scopedThreadKey(scopeThreadRef(defaultProjectRef.environmentId, created.threadId));
+    const occupied = [
+      ...Object.values(useAgentCanvasStore.getState().agents).filter((layout) =>
+        isInCanvasScene(layout),
+      ),
+      ...Object.values(useAgentCanvasStore.getState().notes),
+    ];
+    const slot = findFreeAgentSlot(occupied);
+    pushHistory();
+    setAgentLayout(key, { ...slot, role: "none" });
   };
 
   const spawnWorkerFromLead = async (
@@ -996,7 +1072,7 @@ function AgentCanvasFlow() {
     });
   };
 
-  const zoomPercent = Math.round(view.zoom * 100);
+  const zoomPercent = Math.round(liveZoom * 100);
   const panMode = tool === "pan";
   const sceneNodes = flowNodes.filter((node) => isInCanvasScene(node.position));
   const sceneAgentCount = sceneNodes.filter((node) => node.type === "agent").length;
@@ -1006,9 +1082,16 @@ function AgentCanvasFlow() {
       data-agent-canvas
       className="relative flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background"
     >
-      <div className="flex h-10 shrink-0 items-center gap-3 border-b border-border/70 px-3">
-        <h1 className="text-sm font-medium tracking-tight">{gt("Agent canvas")}</h1>
-        <span className="text-2xs text-muted-foreground">
+      <div
+        className={cn(
+          "flex h-[var(--workspace-topbar-height)] min-h-[var(--workspace-topbar-height)] shrink-0 items-center gap-2 border-b border-border/70 pr-(--workspace-gutter-end) pl-(--workspace-gutter-start) sm:gap-3",
+          COLLAPSED_SIDEBAR_TITLEBAR_INSET_CLASS,
+        )}
+      >
+        <h1 className="min-w-0 truncate text-sm font-medium tracking-tight">
+          {gt("Agent canvas")}
+        </h1>
+        <span className="hidden text-2xs text-muted-foreground sm:inline">
           {gt("{count, plural, one {# agent} other {# agents}}", { count: sceneAgentCount })}
         </span>
         {attentionKeys.length > 0 ? (
@@ -1016,17 +1099,20 @@ function AgentCanvasFlow() {
             size="xs"
             variant="secondary"
             data-agent-canvas-attention-count
+            className="min-w-0 shrink"
             onClick={focusNextAttention}
           >
-            <span className="inline-flex items-center gap-1.5">
-              <AlertTriangleIcon className="size-3.5 text-warning" />
-              {gt("{count, plural, one {# needs you} other {# need you}}", {
-                count: attentionKeys.length,
-              })}
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <AlertTriangleIcon className="size-3.5 shrink-0 text-warning" />
+              <span className="truncate">
+                {gt("{count, plural, one {# needs you} other {# need you}}", {
+                  count: attentionKeys.length,
+                })}
+              </span>
             </span>
           </Button>
         ) : null}
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger
               render={
@@ -1122,6 +1208,7 @@ function AgentCanvasFlow() {
           }}
           onSelectionDragStop={endHistoryGesture}
           onDelete={onDelete}
+          onMove={onMove}
           onMoveEnd={onMoveEnd}
           minZoom={0.28}
           maxZoom={2.5}
@@ -1137,7 +1224,8 @@ function AgentCanvasFlow() {
           zoomOnDoubleClick={false}
           deleteKeyCode={["Backspace", "Delete"]}
           multiSelectionKeyCode="Shift"
-          onlyRenderVisibleElements
+          // Keep edges mounted when LOD swaps node size — culling dropped chip paths.
+          onlyRenderVisibleElements={false}
           fitView={false}
           proOptions={{ hideAttribution: true }}
           onPaneClick={endHistoryGesture}
@@ -1150,7 +1238,7 @@ function AgentCanvasFlow() {
             color="color-mix(in oklab, var(--color-border) 70%, transparent)"
           />
 
-          {sceneNodes.length >= 3 && (viewportSize?.width ?? 0) >= 720 ? (
+          {sceneNodes.length >= 3 && (viewportSize?.width ?? 0) >= AGENT_CANVAS_NARROW_VIEWPORT ? (
             <MiniMap
               pannable
               zoomable={false}
@@ -1194,20 +1282,25 @@ function AgentCanvasFlow() {
                       threadKey,
                     };
                   });
-                  const size = viewportSize ?? { width: 1200, height: 800 };
-                  const focusLayouts = preferredFitLayouts(
-                    agentLayouts,
-                    edges,
-                    size.width < 720 ? 0 : 3,
-                  );
-                  const cleared = computeFitViewport(
-                    focusLayouts.length > 0 ? focusLayouts : agentLayouts,
-                    size,
-                    {
-                      minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
-                      maxZoom: 1,
-                    },
-                  );
+                  // Prefer live surface size — ResizeObserver state can lag a resize by a frame.
+                  const size =
+                    surface && surface.clientWidth > 0
+                      ? { width: surface.clientWidth, height: surface.clientHeight }
+                      : (viewportSize ?? { width: 1200, height: 800 });
+                  const narrow = size.width < AGENT_CANVAS_NARROW_VIEWPORT;
+                  const focusLayouts = preferredFitLayouts(agentLayouts, edges, narrow ? 0 : 3);
+                  const leadLayout = focusLayouts[0] ?? agentLayouts[0];
+                  const cleared =
+                    narrow && leadLayout
+                      ? computeNarrowLeadFit(leadLayout, size)
+                      : computeFitViewport(
+                          focusLayouts.length > 0 ? focusLayouts : agentLayouts,
+                          size,
+                          {
+                            minZoom: AGENT_CANVAS_DEFAULT_FIT_MIN_ZOOM,
+                            maxZoom: 1,
+                          },
+                        );
                   void setViewport(cleared, { duration: 220 }).then(() => {
                     setView(cleared);
                   });

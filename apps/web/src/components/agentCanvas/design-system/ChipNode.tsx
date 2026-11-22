@@ -23,8 +23,10 @@ export function chipSizeForLayout(
   readonly screenHeight: number;
 } {
   const z = Math.max(0.15, Math.min(zoom, 1));
-  const screenWidth = Math.min(AGENT_CANVAS_CHIP_SCREEN.width, layout.width * z);
-  const screenHeight = Math.min(AGENT_CANVAS_CHIP_SCREEN.height, layout.height * z);
+  // Cap chip to ~72% of the layout footprint so lead→worker connectors have a
+  // clear horizontal run inside the node box (not only the inter-card gap).
+  const screenWidth = Math.min(AGENT_CANVAS_CHIP_SCREEN.width, layout.width * z * 0.72);
+  const screenHeight = Math.min(AGENT_CANVAS_CHIP_SCREEN.height, layout.height * z * 0.72);
   return {
     flowWidth: screenWidth / z,
     flowHeight: screenHeight / z,
