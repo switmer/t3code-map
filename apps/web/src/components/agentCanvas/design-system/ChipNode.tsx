@@ -4,11 +4,13 @@ import { cn } from "~/lib/utils";
 
 import type { AcRole, AcStatusTone } from "./acTypes";
 import { AttentionBadge } from "./AttentionBadge";
-import { RolePill } from "./RolePill";
 import { StatusDot } from "./StatusDot";
 
-/** Screen-space chip size (counter-scaled so it stays readable at 20–40% zoom). */
-export const AGENT_CANVAS_CHIP_SCREEN = { width: 176, height: 40 } as const;
+/**
+ * Screen-space chip size (counter-scaled so it stays readable at 20–40% zoom).
+ * Wide enough for a truncated agent name + status + compact attention icon.
+ */
+export const AGENT_CANVAS_CHIP_SCREEN = { width: 220, height: 36 } as const;
 
 type ChipNodeProps = {
   readonly className?: string;
@@ -34,7 +36,6 @@ export function ChipNode({
   statusLabel,
   title,
   zoom = 1,
-  role = "none",
   showAttention = false,
   onClick,
   trailing,
@@ -47,6 +48,10 @@ export function ChipNode({
     transform: `scale(${inv})`,
     transformOrigin: "top left",
   };
+  const attentionVariant =
+    statusTone === "failed" ? "failed" : statusTone === "done" ? "done" : "needs-you";
+  const attentionLabel =
+    statusTone === "failed" ? "Failed" : statusTone === "done" ? "Done" : "Needs you";
 
   return (
     <button
@@ -54,45 +59,35 @@ export function ChipNode({
       data-agent-canvas-lod="chip"
       data-agent-canvas-status={statusTone}
       aria-label={statusLabel ? `${title} · ${statusLabel}` : title}
+      title={title}
       onClick={onClick}
       className={cn(
         "agent-canvas-ds relative block h-full w-full overflow-visible border-0 bg-transparent p-0 text-left outline-none",
-        "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--ac-border-focus)]",
+        "focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         className,
       )}
     >
       <div
         className={cn(
-          "inline-flex items-center gap-[var(--ac-space-2)] rounded-[var(--ac-radius-md)] border border-[var(--ac-border-default)] bg-[var(--ac-surface-1)] px-[var(--ac-space-2)] shadow-[var(--ac-shadow-1)]",
-          statusTone === "failed" &&
-            "border-[color-mix(in_oklab,var(--ac-status-failed)_55%,var(--ac-border-default))]",
-          statusTone === "waiting" &&
-            "border-[color-mix(in_oklab,var(--ac-status-waiting)_55%,var(--ac-border-default))]",
-          statusTone === "running" &&
-            "border-[color-mix(in_oklab,var(--ac-status-running)_45%,var(--ac-border-default))]",
+          "inline-flex max-w-full items-center gap-1.5 rounded-md border border-border bg-card px-2 shadow-composer",
+          statusTone === "failed" && "border-destructive/45",
+          statusTone === "waiting" && "border-warning/45",
+          statusTone === "running" && "border-success/40",
         )}
         style={innerStyle}
       >
         <StatusDot tone={statusTone} />
-        <span className="min-w-0 flex-1 truncate text-[length:var(--ac-font-sm)] font-medium tracking-tight text-[var(--ac-text-primary)]">
+        <span className="min-w-0 flex-1 truncate text-[length:var(--ac-font-sm)] font-medium tracking-tight text-foreground">
           {title}
         </span>
-        {statusLabel ? (
-          <span className="shrink-0 text-[length:var(--ac-font-xs)] font-medium text-[var(--ac-text-secondary)]">
+        {statusLabel && !showAttention ? (
+          <span className="max-w-16 shrink-0 truncate text-[length:var(--ac-font-xs)] font-medium text-muted-foreground">
             {statusLabel}
           </span>
         ) : null}
         {showAttention ? (
-          <AttentionBadge
-            variant={
-              statusTone === "failed" ? "failed" : statusTone === "done" ? "done" : "needs-you"
-            }
-            label={
-              statusTone === "failed" ? "Failed" : statusTone === "done" ? "Done" : "Needs you"
-            }
-          />
+          <AttentionBadge compact variant={attentionVariant} label={attentionLabel} />
         ) : null}
-        {role !== "none" ? <RolePill role={role} /> : null}
         {trailing}
       </div>
     </button>

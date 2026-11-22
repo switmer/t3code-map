@@ -1,25 +1,14 @@
-import { cva, type VariantProps } from "class-variance-authority";
 import { AlertTriangleIcon, CheckIcon, CircleAlertIcon } from "lucide-react";
 
+import { Badge } from "~/components/ui/badge";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 
-const attentionBadgeVariants = cva(
-  "inline-flex items-center gap-[var(--ac-space-1)] rounded-[var(--ac-radius-sm)] border px-[var(--ac-space-2)] py-[calc(var(--ac-space-1)/2)] font-medium leading-none",
-  {
-    defaultVariants: {
-      variant: "needs-you",
-    },
-    variants: {
-      variant: {
-        done: "border-[color-mix(in_oklab,var(--ac-status-done)_35%,transparent)] bg-[var(--ac-status-done-surface)] text-[var(--ac-status-done)]",
-        failed:
-          "border-[color-mix(in_oklab,var(--ac-status-failed)_35%,transparent)] bg-[var(--ac-status-failed-surface)] text-[var(--ac-status-failed)]",
-        "needs-you":
-          "border-[color-mix(in_oklab,var(--ac-status-waiting)_40%,transparent)] bg-[var(--ac-status-waiting-surface)] text-[var(--ac-status-waiting)]",
-      },
-    },
-  },
-);
+const attentionTone = {
+  done: "success",
+  failed: "error",
+  "needs-you": "warning",
+} as const;
 
 const VARIANT_ICONS = {
   done: CheckIcon,
@@ -27,22 +16,45 @@ const VARIANT_ICONS = {
   "needs-you": AlertTriangleIcon,
 } as const;
 
-type AttentionBadgeProps = VariantProps<typeof attentionBadgeVariants> & {
+type AttentionBadgeProps = {
   className?: string;
+  /** Icon-only (with tooltip). Use on chip LOD so the title keeps horizontal room. */
+  compact?: boolean;
   label: string;
+  variant?: "needs-you" | "failed" | "done";
 };
 
-export function AttentionBadge({ className, label, variant }: AttentionBadgeProps) {
-  const Icon = VARIANT_ICONS[variant ?? "needs-you"];
-  return (
-    <span
+export function AttentionBadge({
+  className,
+  compact = false,
+  label,
+  variant = "needs-you",
+}: AttentionBadgeProps) {
+  const Icon = VARIANT_ICONS[variant];
+  const badge = (
+    <Badge
+      variant={attentionTone[variant]}
+      size="sm"
       className={cn(
-        attentionBadgeVariants({ className, variant }),
-        "text-[length:var(--ac-font-xs)]",
+        // Override Badge sm's 10px desktop size — canvas floor is text-2xs (11px).
+        "gap-0.5 whitespace-nowrap text-[length:var(--ac-font-xs)] leading-none",
+        compact && "min-w-4 px-0.5",
+        !compact && "px-1",
+        className,
       )}
+      aria-label={label}
     >
-      <Icon aria-hidden className="size-3 shrink-0 opacity-90" />
-      {label}
-    </span>
+      <Icon aria-hidden className="size-2.5 shrink-0 opacity-90" />
+      {compact ? null : <span className="leading-none">{label}</span>}
+    </Badge>
+  );
+
+  if (!compact) return badge;
+
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<span className="inline-flex shrink-0" />}>{badge}</TooltipTrigger>
+      <TooltipPopup>{label}</TooltipPopup>
+    </Tooltip>
   );
 }

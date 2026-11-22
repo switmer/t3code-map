@@ -52,9 +52,9 @@ const agentCardVariants = cva(
         selected: "",
       } satisfies Record<AcCardState, string>,
       variant: {
-        chip: "rounded-[var(--ac-radius-md)] shadow-[var(--ac-shadow-0)]",
-        interactive: "rounded-[var(--ac-radius-lg)] shadow-[var(--ac-shadow-2)]",
-        preview: "rounded-[var(--ac-radius-lg)] shadow-[var(--ac-shadow-1)]",
+        chip: "rounded-[var(--ac-radius-md)] shadow-none",
+        interactive: "rounded-[var(--ac-radius-lg)] shadow-composer",
+        preview: "rounded-[var(--ac-radius-lg)] shadow-composer",
       } satisfies Record<AcCardVariant, string>,
     },
   },

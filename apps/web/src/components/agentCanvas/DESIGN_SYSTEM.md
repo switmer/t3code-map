@@ -4,100 +4,124 @@ Dense, calm, terminal-grade UI for multi-agent canvases. Visual references: **Li
 
 Tokens live in `agentCanvasTokens.css` (scoped to `[data-agent-canvas]` and `.agent-canvas-ds`). Components live under `design-system/`. Browse live specimens at `/canvas-design-system`.
 
+**Rule:** the canvas is a denser native t3 surface — not a parallel theme. Prefer app tokens and `components/ui` primitives; `--ac-*` exists only as a short alias or a proportional scale of an app value.
+
 ## Principles
 
-| Principle      | Meaning                                                         |
-| -------------- | --------------------------------------------------------------- |
-| Dense          | 4px spacing scale, compact type, no decorative padding          |
-| Calm           | Muted surfaces, semantic color only on status/edges             |
-| Terminal-grade | Mono for paths/commands; tool rows read like a shell transcript |
-| Theme-native   | All colors via `var(--color-*)` mixes — no canvas-specific hex  |
-| LOD-aware      | Three zoom bands drive card variant, not separate products      |
+| Principle        | Meaning                                                            |
+| ---------------- | ------------------------------------------------------------------ |
+| Dense            | 4px spacing scale, compact type, no decorative padding             |
+| Calm             | Muted surfaces, semantic color only on status/edges                |
+| Terminal-grade   | Mono for paths/commands; tool rows read like a shell transcript    |
+| Theme-native     | All colors via `var(--color-*)` mixes — no canvas-specific hex     |
+| Appearance-aware | Mono, composer, and code size follow `appearanceFonts.ts` settings |
+| LOD-aware        | Three zoom bands drive card variant, not separate products         |
 
 ## Level of detail (LOD)
 
-| Zoom        | Variant       | Behavior                                                                                            |
-| ----------- | ------------- | --------------------------------------------------------------------------------------------------- |
-| ≥ 0.55      | `interactive` | Full `AgentCard`, live session mount                                                                |
-| 0.35 – 0.55 | `preview`     | `PreviewNode` — header + 2–3 summary lines                                                          |
-| < 0.35      | `chip`        | `ChipNode` — title + status; **counter-scale** title (inverse zoom) so text stays legible at 20–40% |
+| Zoom        | Variant       | Behavior                                                                                                |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------- |
+| ≥ 0.55      | `interactive` | Full `AgentCard`, live session mount                                                                    |
+| 0.40 – 0.55 | `preview`     | `PreviewNode` — header + 2–3 summary lines                                                              |
+| < 0.40      | `chip`        | `ChipNode` — title + status + compact attention; **counter-scale** chrome so text stays legible at ~28% |
 
-**Do** pass `zoom` into `ChipNode` for counter-scale. **Don't** shrink font sizes below tokens at chip LOD — scale the inner wrapper instead.
+Fit-view `minZoom` is **0.28** so dense scenes center as a chip cluster (not bumped up to preview). Edges stay visible at chip LOD.
 
-## Token tables
+**Do** pass `zoom` into `ChipNode` for counter-scale. **Don't** shrink font sizes below tokens at chip LOD — scale the inner wrapper instead. **Don't** put a full "Needs you" text badge on chips — use `AttentionBadge compact` (icon + tooltip).
 
-### Spacing
+## Canvas → app token mapping
 
-| Token          | Value |
-| -------------- | ----- |
-| `--ac-space-0` | 0     |
-| `--ac-space-1` | 4px   |
-| `--ac-space-2` | 8px   |
-| `--ac-space-3` | 12px  |
-| `--ac-space-4` | 16px  |
-| `--ac-space-5` | 24px  |
-| `--ac-space-6` | 32px  |
+### Type & fonts
 
-### Radius
+| Canvas token                  | App source                            | Notes                                |
+| ----------------------------- | ------------------------------------- | ------------------------------------ |
+| `--ac-font-xs`                | `--text-2xs` (11px / 0.6875rem)       | Floor — no general 10px              |
+| `--ac-font-sm`                | `--text-xs` (12px / 0.75rem)          | Meta labels, chip titles             |
+| `--ac-font-md`                | `0.8125rem` (13px)                    | Between xs and sm roles              |
+| `--ac-font-base`              | `--text-sm` (14px / 0.875rem)         | Body                                 |
+| `--ac-font-lg`                | `--text-base` (16px / 1rem)           | Titles                               |
+| `--ac-font-mono`              | `--font-mono`                         | From appearance code-font preference |
+| `--ac-font-composer`          | `--font-composer` → `--font-sans`     | Same as main composer                |
+| `--ac-font-code`              | `calc(var(--font-size-code) * 0.92)`  | Tracks code size setting             |
+| `--ac-font-diff`              | `calc(var(--diffs-font-size) * 0.92)` | Tracks diffs size                    |
+| `--ac-font-weight-*`          | 400 / 500 / 600                       | Matches chat meta/body/title         |
+| `--ac-line-tight/snug/normal` | 1.25 / 1.35 / 1.5                     | Equivalent roles                     |
 
-| Token            | Maps to            |
-| ---------------- | ------------------ |
-| `--ac-radius-sm` | `var(--radius-sm)` |
-| `--ac-radius-md` | `var(--radius-md)` |
-| `--ac-radius-lg` | `var(--radius-lg)` |
-| `--ac-radius-xl` | `var(--radius-xl)` |
+### Surfaces, borders, text, accent
 
-### Surfaces & text
+| Canvas token            | App source / mix           |
+| ----------------------- | -------------------------- |
+| `--ac-surface-0`        | `--color-background`       |
+| `--ac-surface-1`        | `--color-card`             |
+| `--ac-surface-2`        | popover/muted mix          |
+| `--ac-surface-3`        | muted translucent          |
+| `--ac-surface-elevated` | `--color-popover`          |
+| `--ac-border-subtle`    | border @ 65%               |
+| `--ac-border-default`   | `--color-border`           |
+| `--ac-border-strong`    | foreground/border mix      |
+| `--ac-border-focus`     | `--color-ring`             |
+| `--ac-text-primary`     | `--color-foreground`       |
+| `--ac-text-secondary`   | `--color-muted-foreground` |
+| `--ac-text-tertiary`    | muted-foreground @ 72%     |
+| `--ac-text-muted`       | muted-foreground @ 55%     |
+| `--ac-accent`           | `--color-primary`          |
 
-| Token                   | Role                              |
-| ----------------------- | --------------------------------- |
-| `--ac-surface-0..3`     | Canvas background → nested panels |
-| `--ac-surface-elevated` | Toolbar, composer, popovers       |
-| `--ac-text-primary`     | Titles, primary copy              |
-| `--ac-text-secondary`   | Metadata, provider labels         |
-| `--ac-text-tertiary`    | Preview lines, hints              |
-| `--ac-text-muted`       | Placeholders, disabled            |
+### Radius & spacing
 
-### Status
+| Canvas token         | App source                                             |
+| -------------------- | ------------------------------------------------------ |
+| `--ac-radius-sm..xl` | `--radius-sm..xl`                                      |
+| `--ac-space-1..6`    | 4 / 8 / 12 / 16 / 24 / 32px (same as Tailwind spacing) |
 
-| Tone    | Token                 | Use                         |
-| ------- | --------------------- | --------------------------- |
-| running | `--ac-status-running` | Active turn / tool          |
-| waiting | `--ac-status-waiting` | Approval, input, attention  |
-| failed  | `--ac-status-failed`  | Run error                   |
-| done    | `--ac-status-done`    | Completed run               |
-| idle    | `--ac-status-idle`    | Parked / no recent activity |
-| ready   | `--ac-status-ready`   | Ready to send               |
+### Shadows (restrained — match sidebar/popover)
 
-### Roles
+| Canvas token        | App equivalent                          |
+| ------------------- | --------------------------------------- |
+| `--ac-shadow-0`     | none                                    |
+| `--ac-shadow-1`     | `--shadow-composer` / `shadow-composer` |
+| `--ac-shadow-2`     | `0 1px 2px / 6%` (≈ `shadow-sm`)        |
+| `--ac-shadow-3`     | `0 1px 3px / 8%`                        |
+| `--ac-shadow-4`     | light raised (toolbar only)             |
+| `--ac-shadow-focus` | ring-colored focus halo                 |
 
-| Role        | Surface token                   |
-| ----------- | ------------------------------- |
-| lead        | `--ac-role-lead-surface`        |
-| coordinator | `--ac-role-coordinator-surface` |
-| worker      | `--ac-role-worker-surface`      |
+Cards use `shadow-composer`, not multi-layer drops.
 
-### Edges
+### Status / roles / edges
 
-| Kind       | Token                  |
-| ---------- | ---------------------- |
-| idle       | `--ac-edge-idle`       |
-| active     | `--ac-edge-active`     |
-| broadcast  | `--ac-edge-broadcast`  |
-| dependency | `--ac-edge-dependency` |
+| Canvas token                                 | App source                             |
+| -------------------------------------------- | -------------------------------------- |
+| `--ac-status-running/done`                   | `--color-success`                      |
+| `--ac-status-waiting`                        | `--color-warning`                      |
+| `--ac-status-failed`                         | `--color-destructive`                  |
+| `--ac-status-*-surface`                      | warning/error/success surfaces         |
+| `--ac-role-lead*`                            | `--color-primary` mixes                |
+| `--ac-role-worker*`                          | muted                                  |
+| `--ac-edge-idle/active/broadcast/dependency` | muted / primary / warning / info mixes |
 
 ### Motion
 
-| Token                          | Typical use                 |
-| ------------------------------ | --------------------------- |
-| `--ac-duration-fast` (120ms)   | Hover, handle chrome        |
-| `--ac-duration-normal` (200ms) | Composer focus ring         |
-| `--ac-duration-stream` (1.4s)  | Status pulse, stream cursor |
-| `--ac-ease-lod`                | LOD cross-fade (future)     |
+| Canvas token           | App / use         |
+| ---------------------- | ----------------- |
+| `--ac-duration-fast`   | 120ms hover       |
+| `--ac-duration-normal` | 200ms focus       |
+| `--ac-duration-stream` | 2s pulse / cursor |
+| `--ac-ease-lod`        | `--ease-drawer`   |
 
-### Z-index
+## Component → app primitive mapping
 
-`--ac-z-base` → `--ac-z-modal` (1, 5, 8, 12, 20). React Flow node selection uses raised layer inside the flow.
+| Canvas component          | Prefer / reuse                                |
+| ------------------------- | --------------------------------------------- |
+| `AttentionBadge`          | `Badge` + `Tooltip` (`compact` = icon-only)   |
+| `StatusBadge`             | `Badge` size `sm` + `StatusDot`               |
+| `RolePill`                | `Badge` size `sm` with role surface tokens    |
+| `ToolbarButton`           | `Button` + `Tooltip`                          |
+| `ZoomBadge`               | bordered pill; monospace via `--ac-font-mono` |
+| `CompactComposer`         | `.ac-type-composer` → `--font-composer`       |
+| `CodeBlock` / tool detail | `.ac-type-mono` + `--ac-font-code`            |
+| `AgentCard` shadows       | `shadow-composer`                             |
+| Canvas menus/focus        | same `ring-ring` / `focus-visible` as chat    |
+
+**Do** import from `~/components/ui/*` when the control already exists. **Don't** invent a second Badge/Button/Tooltip for canvas-only chrome.
 
 ## Component API (summary)
 
@@ -109,37 +133,26 @@ Tokens live in `agentCanvasTokens.css` (scoped to `[data-agent-canvas]` and `.ag
 | `state`   | `default` \| `focused` \| `selected` \| `failed` \| `attention` \| `running` |
 | slots     | `header`, `body`, `footer`                                                   |
 
-**Do** compose with `CardHeader`. **Don't** embed chat logic — shell only.
-
 ### `CardHeader`
 
 `title`, optional `providerLabel`, `statusTone`, `role` + `roleLabel`, `overflow` slot (menus).
 
-### `StatusDot` / `StatusBadge`
+### `StatusDot` / `StatusBadge` / `AttentionBadge`
 
-Tones: `running` \| `waiting` \| `failed` \| `done` \| `idle` \| `ready`.
+Tones: `running` \| `waiting` \| `failed` \| `done` \| `idle` \| `ready`.  
+`AttentionBadge compact` for chip LOD.
 
-**Do** use `StatusDot` in headers. **Don't** use raw Tailwind color utilities for status.
+### `ToolRow` / `MessageRow` / `CompactComposer` / `CodeBlock`
 
-### `ToolRow`
-
-`kind`: `read` \| `edit` \| `test` \| `terminal` \| `search`. `expanded`, `state`: `running` \| `success` \| `fail`.
-
-### `MessageRow`
-
-`role`: `user` \| `assistant` \| `system`. `streaming` adds cursor affordance.
-
-### `CompactComposer`
-
-Gallery shell only: `state`: `unfocused` \| `focused` \| `disabled` \| `streamingStop`.
+Mono details and code use `--ac-font-code`. Composer uses `--ac-font-composer`.
 
 ### `ChipNode` / `PreviewNode`
 
-LOD presentations; accept `title`, `statusTone`, optional `zoom` (chip).
+LOD presentations; pass `zoom` into `ChipNode`. Chip width ~220×36 screen-space after inverse scale.
 
 ### `CanvasEdgeStyles`
 
-`canvasEdgeClassName(kind)`, `canvasEdgeStyle(kind)` for SVG stroke styles.
+`canvasEdgeClassName(kind)`, `canvasEdgeStyle(kind)` — edges render at every LOD including chip.
 
 ### Canvas chrome
 

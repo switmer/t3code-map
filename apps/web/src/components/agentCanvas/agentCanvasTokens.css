@@ -1,7 +1,7 @@
-/* Agent Canvas design tokens — extends app theme; no raw hex. */
+/* Agent Canvas design tokens — aliases of the app theme; no forked hex. */
 [data-agent-canvas],
 .agent-canvas-ds {
-  /* Spacing (4px scale) */
+  /* Spacing (4px scale, same as Tailwind spacing) */
   --ac-space-0: 0px;
   --ac-space-1: 4px;
   --ac-space-2: 8px;
@@ -10,7 +10,7 @@
   --ac-space-5: 24px;
   --ac-space-6: 32px;
 
-  /* Radius */
+  /* Radius — app radius scale */
   --ac-radius-sm: var(--radius-sm);
   --ac-radius-md: var(--radius-md);
   --ac-radius-lg: var(--radius-lg);
@@ -21,13 +21,13 @@
   --ac-surface-1: var(--color-card);
   --ac-surface-2: color-mix(in oklab, var(--color-popover) 92%, var(--color-muted));
   --ac-surface-3: color-mix(in oklab, var(--color-muted) 55%, transparent);
-  --ac-surface-elevated: color-mix(in oklab, var(--color-popover) 96%, transparent);
+  --ac-surface-elevated: var(--color-popover);
 
   /* Borders */
   --ac-border-subtle: color-mix(in oklab, var(--color-border) 65%, transparent);
   --ac-border-default: var(--color-border);
   --ac-border-strong: color-mix(in oklab, var(--color-foreground) 22%, var(--color-border));
-  --ac-border-focus: color-mix(in oklab, var(--color-primary) 45%, var(--color-border));
+  --ac-border-focus: var(--color-ring);
 
   /* Text tiers */
   --ac-text-primary: var(--color-foreground);
@@ -69,38 +69,49 @@
   --ac-edge-broadcast: color-mix(in oklab, var(--color-warning) 65%, var(--color-muted-foreground));
   --ac-edge-dependency: color-mix(in oklab, var(--color-info) 58%, var(--color-muted-foreground));
 
-  /* Shadows */
+  /*
+   * Shadows — match sidebar/popover restraint (shadow-sm/5, shadow-composer).
+   * No floaty multi-layer drops.
+   */
   --ac-shadow-0: none;
-  --ac-shadow-1: 0 1px 2px color-mix(in oklab, var(--color-foreground) 8%, transparent);
-  --ac-shadow-2: 0 2px 8px -2px color-mix(in oklab, var(--color-foreground) 12%, transparent);
-  --ac-shadow-3: 0 8px 24px -6px color-mix(in oklab, var(--color-foreground) 12%, transparent);
-  --ac-shadow-4: 0 16px 40px -12px color-mix(in oklab, var(--color-foreground) 18%, transparent);
-  --ac-shadow-focus: 0 0 0 3px color-mix(in oklab, var(--color-primary) 22%, transparent);
+  --ac-shadow-1: var(--shadow-composer, 0 1px 2px rgb(0 0 0 / 5%));
+  --ac-shadow-2: 0 1px 2px rgb(0 0 0 / 6%);
+  --ac-shadow-3: 0 1px 3px rgb(0 0 0 / 8%);
+  --ac-shadow-4: 0 2px 6px -1px rgb(0 0 0 / 10%);
+  --ac-shadow-focus: 0 0 0 2px color-mix(in oklab, var(--color-ring) 35%, transparent);
 
-  /* Typography */
-  --ac-font-xs: 0.625rem;
-  --ac-font-sm: 0.75rem;
+  /*
+   * Type ramp — app sizes only (no 10px / 0.625rem as a general UI size).
+   * xs → text-2xs (11px), sm → text-xs (12px), md → 13px, base → text-sm (14px), lg → 16px.
+   */
+  --ac-font-xs: var(--text-2xs, 0.6875rem);
+  --ac-font-sm: var(--text-xs, 0.75rem);
   --ac-font-md: 0.8125rem;
-  --ac-font-base: 0.875rem;
-  --ac-font-lg: 1rem;
+  --ac-font-base: var(--text-sm, 0.875rem);
+  --ac-font-lg: var(--text-base, 1rem);
   --ac-font-weight-normal: 400;
   --ac-font-weight-medium: 500;
   --ac-font-weight-semibold: 600;
-  --ac-line-tight: 1.2;
+  --ac-line-tight: 1.25;
   --ac-line-snug: 1.35;
-  --ac-line-normal: 1.45;
-  --ac-font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --ac-line-normal: 1.5;
+  /* Follow appearanceFonts --font-mono (never hardcode ui-monospace alone). */
+  --ac-font-mono: var(--font-mono);
+  --ac-font-composer: var(--font-composer, var(--font-sans));
+  /* Compact code tracks the user's code size setting. */
+  --ac-font-code: calc(var(--font-size-code, var(--text-xs)) * 0.92);
+  --ac-font-diff: calc(var(--diffs-font-size, var(--font-size-code, var(--text-xs))) * 0.92);
 
-  /* Motion */
+  /* Motion — drawer ease from the app theme where it fits */
   --ac-duration-instant: 80ms;
   --ac-duration-fast: 120ms;
   --ac-duration-normal: 200ms;
   --ac-duration-slow: 320ms;
-  --ac-duration-stream: 1.4s;
+  --ac-duration-stream: 2s;
   --ac-ease-hover: cubic-bezier(0.25, 0.1, 0.25, 1);
   --ac-ease-focus: cubic-bezier(0.2, 0, 0, 1);
   --ac-ease-stream: ease-in-out;
-  --ac-ease-lod: cubic-bezier(0.4, 0, 0.2, 1);
+  --ac-ease-lod: var(--ease-drawer, cubic-bezier(0.32, 0.72, 0, 1));
 
   /* Z-index */
   --ac-z-base: 1;
@@ -112,8 +123,14 @@
 
 .agent-canvas-ds .ac-type-mono {
   font-family: var(--ac-font-mono);
-  font-size: var(--ac-font-sm);
+  font-size: var(--ac-font-code);
   line-height: var(--ac-line-snug);
+}
+
+.agent-canvas-ds .ac-type-composer {
+  font-family: var(--ac-font-composer);
+  font-size: var(--ac-font-sm);
+  line-height: var(--ac-line-normal);
 }
 
 .agent-canvas-ds .ac-status-pulse {

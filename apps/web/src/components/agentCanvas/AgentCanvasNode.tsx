@@ -137,8 +137,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
 
   const workers = workerKeysForLead(threadKey, edges);
 
-  const handleGeometryKey = `${data.role}:${workers.length}`;
-  // Keep React Flow handle positions in sync when fan count / role changes.
+  const handleGeometryKey = `${data.role}:${workers.length}:${lod}`;
+  // Keep React Flow handle positions in sync when fan count / role / LOD changes.
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- syncs handle geometry with React Flow internals
   useEffect(() => {
     if (handleGeometryKey.length === 0) return;
@@ -158,9 +158,55 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
               ? "selected"
               : "default";
 
+  // Handles must exist at every LOD so lead→worker edges stay visible when zoomed out.
+  // Chip/preview keep them invisible; interactive keeps the prior chrome.
+  const handleChrome = lod === "interactive" ? "" : "!opacity-0 !pointer-events-none";
+  const connectionHandles = (
+    <>
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="in"
+        className={cn("!-left-1 !top-1/2", handleChrome)}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="in-top"
+        className={cn("!-top-1", handleChrome)}
+      />
+      {LEAD_SOURCE_HANDLES.map((handleId, index) => (
+        <Handle
+          key={handleId}
+          type="source"
+          position={Position.Right}
+          id={handleId}
+          className={cn("!-right-1", handleChrome)}
+          style={{
+            top: leadHandleTopPercent(index),
+            transform: "translate(50%, -50%)",
+          }}
+        />
+      ))}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="out"
+        className={cn("!-right-1", handleChrome)}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="out-bottom"
+        className={cn("!-bottom-1", handleChrome)}
+      />
+    </>
+  );
+
   if (lod === "chip") {
     return (
-      <div data-agent-canvas-node={threadKey} className="h-full w-full">
+      <div data-agent-canvas-node={threadKey} className="relative h-full w-full">
+        {connectionHandles}
         <ChipNode
           title={title}
           statusTone={acTone}
@@ -176,7 +222,8 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
 
   if (lod === "preview") {
     return (
-      <div data-agent-canvas-node={threadKey} className="w-full">
+      <div data-agent-canvas-node={threadKey} className="relative w-full">
+        {connectionHandles}
         <PreviewNode
           title={title}
           statusTone={acTone}
@@ -301,23 +348,7 @@ export const AgentCanvasNode = memo(function AgentCanvasNode({
             handleClassName="!size-1.5 !rounded-xs !border-primary !bg-background"
           />
 
-          <Handle type="target" position={Position.Left} id="in" className="!-left-1 !top-1/2" />
-          <Handle type="target" position={Position.Top} id="in-top" className="!-top-1" />
-          {LEAD_SOURCE_HANDLES.map((handleId, index) => (
-            <Handle
-              key={handleId}
-              type="source"
-              position={Position.Right}
-              id={handleId}
-              className="!-right-1"
-              style={{
-                top: leadHandleTopPercent(index),
-                transform: "translate(50%, -50%)",
-              }}
-            />
-          ))}
-          <Handle type="source" position={Position.Right} id="out" className="!-right-1" />
-          <Handle type="source" position={Position.Bottom} id="out-bottom" className="!-bottom-1" />
+          {connectionHandles}
 
           {broadcastOpen ? (
             <div

@@ -89,7 +89,7 @@ export function ToolRow({
               <StatusDot size="sm" tone={tone} />
             </div>
             {expanded && detail ? (
-              <p className="mt-[var(--ac-space-1)] text-[length:var(--ac-font-xs)] text-[var(--ac-text-tertiary)] ac-type-mono">
+              <p className="ac-type-mono mt-[var(--ac-space-1)] text-[length:var(--ac-font-code)] text-[var(--ac-text-tertiary)]">
                 {detail}
               </p>
             ) : null}
@@ -101,7 +101,7 @@ export function ToolRow({
           <div className="min-w-0 flex-1">
             <ToolRowLabel label={label} state={state} tone={tone} />
             {expanded && detail ? (
-              <p className="mt-[var(--ac-space-1)] text-[length:var(--ac-font-xs)] text-[var(--ac-text-tertiary)] ac-type-mono">
+              <p className="ac-type-mono mt-[var(--ac-space-1)] text-[length:var(--ac-font-code)] text-[var(--ac-text-tertiary)]">
                 {detail}
               </p>
             ) : null}

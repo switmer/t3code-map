@@ -20,7 +20,7 @@ export function CanvasEdgeStylesDemo() {
               y1="16"
               y2="16"
             />
-            <text className="fill-muted-foreground text-[10px]" x="4" y="28">
+            <text className="fill-muted-foreground text-[length:var(--ac-font-xs)]" x="4" y="28">
               {kind}
             </text>
           </svg>

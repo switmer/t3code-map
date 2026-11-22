@@ -323,7 +323,8 @@ function AgentCanvasFlow() {
     const cleared = computeFitViewport(
       sceneLayouts.map((entry) => entry.layout),
       viewportSize,
-      { minZoom: 0.42, maxZoom: 1 },
+      // Allow chip LOD (~28%) so dense scenes center as a readable cluster.
+      { minZoom: 0.28, maxZoom: 1 },
     );
     void setViewport(cleared, { duration: 0 }).then(() => {
       setView(cleared);
@@ -1152,7 +1153,7 @@ function AgentCanvasFlow() {
                     }));
                   const size = viewportSize ?? { width: 1200, height: 800 };
                   const cleared = computeFitViewport(layouts, size, {
-                    minZoom: 0.42,
+                    minZoom: 0.28,
                     maxZoom: 1,
                   });
                   void setViewport(cleared, { duration: 220 }).then(() => {

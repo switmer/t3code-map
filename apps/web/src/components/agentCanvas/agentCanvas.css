@@ -584,7 +584,7 @@
   width: auto !important;
   max-width: 5.5rem !important;
   padding-inline: 0.25rem !important;
-  font-size: 10px !important;
+  font-size: var(--ac-font-xs, 0.6875rem) !important;
   border-radius: 0.25rem !important;
 }
 
@@ -638,7 +638,7 @@
 
 [data-agent-canvas-session] .chat-banner-lane [data-slot="alert-title"],
 [data-agent-canvas-session] .chat-banner-lane [data-slot="alert-description"] {
-  font-size: 10px;
+  font-size: var(--ac-font-xs, 0.6875rem);
   line-height: 1.3;
 }
 

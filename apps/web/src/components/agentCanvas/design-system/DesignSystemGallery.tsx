@@ -152,14 +152,16 @@ export function DesignSystemGallery() {
             <PreviewNode lines={["Waiting for approval"]} statusTone="waiting" title="PR review" />
           </SubGrid>
           <SubGrid label="ChipNode (counter-scaled)">
-            {[0.2, 0.3, 0.4].map((zoom) => (
+            {[0.28, 0.35].map((zoom) => (
               <ChipNode
                 key={zoom}
-                statusTone="running"
-                title={`Zoom ${Math.round(zoom * 100)}%`}
+                showAttention
+                statusTone="waiting"
+                title={`Coordinator · Zoom ${Math.round(zoom * 100)}%`}
                 zoom={zoom}
               />
             ))}
+            <ChipNode statusTone="running" title="Worker · auth routes" zoom={0.28} />
           </SubGrid>
         </Section>
 
@@ -173,7 +175,7 @@ export function DesignSystemGallery() {
           </div>
           <CodeBlock>{`export function fitLod(zoom: number) {
   if (zoom >= 0.55) return "interactive";
-  if (zoom >= 0.35) return "preview";
+  if (zoom >= 0.4) return "preview";
   return "chip";
 }`}</CodeBlock>
         </Section>
